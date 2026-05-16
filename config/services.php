@@ -35,13 +35,12 @@ return [
         ],
     ],
 
-    'google' => [
-        'maps_api_key' => env('GOOGLE_MAPS_API_KEY'),
+    'google_maps' => [
+        'key' => env('GOOGLE_MAPS_API_KEY'),
     ],
 
     'openweathermap' => [
-        'api_key' => env('OPENWEATHERMAP_API_KEY'),
-        'base_url' => 'https://api.openweathermap.org/data/2.5',
+        'key' => env('OPENWEATHERMAP_API_KEY'),
     ],
 
 ];
