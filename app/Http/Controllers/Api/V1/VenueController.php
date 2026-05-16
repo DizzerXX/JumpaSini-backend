@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\ReportHalalRequest;
+use App\Models\Venue;
 use App\Repositories\Contracts\SessionRepositoryInterface;
+use App\Repositories\Contracts\VenueHalalReportRepositoryInterface;
 use App\Services\Venue\VenueDiscoveryService;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
@@ -13,8 +16,9 @@ class VenueController extends Controller
     use ApiResponseTrait;
 
     public function __construct(
-        private readonly SessionRepositoryInterface $sessionRepository,
-        private readonly VenueDiscoveryService      $venueDiscovery,
+        private readonly SessionRepositoryInterface        $sessionRepository,
+        private readonly VenueDiscoveryService             $venueDiscovery,
+        private readonly VenueHalalReportRepositoryInterface $reportRepository,
     ) {}
 
     public function index(string $shortCode): JsonResponse
@@ -42,5 +46,28 @@ class VenueController extends Controller
         );
 
         return $this->successResponse($venues, 'Venues retrieved successfully.');
+    }
+
+    public function reportHalal(ReportHalalRequest $request, string $placeId): JsonResponse
+    {
+        // Find seeded venue by google_place_id (may be null if Google-only)
+        $venue = Venue::where('google_place_id', $placeId)->first();
+
+        $this->reportRepository->create([
+            'venue_id'          => $venue?->id,
+            'google_place_id'   => $placeId,
+            'reported_as_halal' => $request->boolean('reported_as_halal'),
+            'session_id'        => $request->input('session_id'),
+        ]);
+
+        // Recalculate majority vote and update the seeded venue if it exists
+        if ($venue) {
+            $counts  = $this->reportRepository->countByPlaceId($placeId);
+            $isHalal = $counts['total'] > 0 && ($counts['halal'] / $counts['total']) > 0.6;
+
+            $venue->update(['is_halal' => $isHalal]);
+        }
+
+        return $this->successResponse(null, 'Halal report submitted successfully.');
     }
 }

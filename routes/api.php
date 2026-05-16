@@ -11,4 +11,5 @@ Route::prefix('v1')->group(function () {
     Route::delete('sessions/{short_code}/participants/{participant_id}', [SessionController::class, 'removeParticipant']);
     Route::post('sessions/{short_code}/midpoint', [SessionController::class, 'calculateMidpoint']);
     Route::get('sessions/{short_code}/venues', [VenueController::class, 'index']);
+    Route::post('venues/{place_id}/halal-report', [VenueController::class, 'reportHalal']);
 });
