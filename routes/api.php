@@ -8,4 +8,5 @@ Route::prefix('v1')->group(function () {
     Route::get('sessions/{short_code}', [SessionController::class, 'show']);
     Route::post('sessions/{short_code}/participants', [SessionController::class, 'addParticipant']);
     Route::delete('sessions/{short_code}/participants/{participant_id}', [SessionController::class, 'removeParticipant']);
+    Route::post('sessions/{short_code}/midpoint', [SessionController::class, 'calculateMidpoint']);
 });

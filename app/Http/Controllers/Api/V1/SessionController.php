@@ -9,6 +9,7 @@ use App\Http\Resources\ParticipantResource;
 use App\Http\Resources\SessionResource;
 use App\Repositories\Contracts\ParticipantRepositoryInterface;
 use App\Repositories\Contracts\SessionRepositoryInterface;
+use App\Services\Midpoint\MidpointCalculatorService;
 use App\Services\ShortCodeService;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +22,7 @@ class SessionController extends Controller
         private readonly SessionRepositoryInterface     $sessionRepository,
         private readonly ParticipantRepositoryInterface $participantRepository,
         private readonly ShortCodeService               $shortCodeService,
+        private readonly MidpointCalculatorService      $midpointCalculator,
     ) {}
 
     public function store(CreateSessionRequest $request): JsonResponse
@@ -89,6 +91,41 @@ class SessionController extends Controller
             ],
             'Participant added successfully.',
             201
+        );
+    }
+
+    public function calculateMidpoint(string $shortCode): JsonResponse
+    {
+        $session = $this->sessionRepository->findByShortCode($shortCode);
+
+        if (!$session || $session->expires_at->isPast()) {
+            return $this->errorResponse('Session not found or has expired.', null, 404);
+        }
+
+        $participants = $this->participantRepository->findBySession($session->id);
+
+        if ($participants->count() < 2) {
+            return $this->errorResponse(
+                'At least 2 participants are required to calculate a midpoint.',
+                null,
+                422
+            );
+        }
+
+        $result = $this->midpointCalculator->calculate($participants->all(), $session->transport_mode);
+
+        $this->sessionRepository->updateMidpoint($session->id, $result);
+
+        return $this->successResponse(
+            [
+                'lat'            => $result->lat,
+                'lng'            => $result->lng,
+                'is_fair'        => $result->isFair,
+                'travel_times'   => $result->travelTimes,
+                'iterations'     => $result->iterations,
+                'transport_mode' => $result->transportMode,
+            ],
+            'Midpoint calculated successfully.'
         );
     }
 

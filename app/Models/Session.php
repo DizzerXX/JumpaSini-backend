@@ -20,11 +20,21 @@ class Session extends Model
         'halal_filter',
         'status',
         'expires_at',
+        'midpoint_lat',
+        'midpoint_lng',
+        'midpoint_calculated_at',
+        'midpoint_is_fair',
+        'midpoint_travel_times',
     ];
 
     protected $casts = [
-        'halal_filter' => 'boolean',
-        'expires_at'   => 'datetime',
+        'halal_filter'           => 'boolean',
+        'expires_at'             => 'datetime',
+        'midpoint_lat'           => 'float',
+        'midpoint_lng'           => 'float',
+        'midpoint_calculated_at' => 'datetime',
+        'midpoint_is_fair'       => 'boolean',
+        'midpoint_travel_times'  => 'array',
     ];
 
     public function participants(): HasMany
