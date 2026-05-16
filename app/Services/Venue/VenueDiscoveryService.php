@@ -103,7 +103,7 @@ class VenueDiscoveryService
         return $venues;
     }
 
-    private function rankVenues(array $venues): array
+    public function rankVenues(array $venues): array
     {
         if (empty($venues)) {
             return [];
