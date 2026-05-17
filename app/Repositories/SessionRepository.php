@@ -42,4 +42,28 @@ class SessionRepository implements SessionRepositoryInterface
 
         return $session->fresh('participants');
     }
+
+    public function confirmVenue(string $sessionId, string $placeId): Session
+    {
+        $session = Session::findOrFail($sessionId);
+
+        $session->update([
+            'session_confirmed_venue' => $placeId,
+            'session_confirmed_at'    => now(),
+            'status'                  => 'completed',
+        ]);
+
+        return $session->fresh('participants');
+    }
+
+    public function resetMidpoint(string $sessionId): void
+    {
+        Session::where('id', $sessionId)->update([
+            'midpoint_lat'           => null,
+            'midpoint_lng'           => null,
+            'midpoint_calculated_at' => null,
+            'midpoint_is_fair'       => null,
+            'midpoint_travel_times'  => null,
+        ]);
+    }
 }

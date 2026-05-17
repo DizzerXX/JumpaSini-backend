@@ -11,6 +11,8 @@ interface VenueRepositoryInterface
 
     public function findByType(string $type): Collection;
 
+    public function findByGooglePlaceId(string $googlePlaceId): ?Venue;
+
     public function create(array $data): Venue;
 
     public function updateFromGoogle(string $googlePlaceId, array $data): Venue;

@@ -32,6 +32,11 @@ class VenueRepository implements VenueRepositoryInterface
         return Venue::active()->byType($type)->get();
     }
 
+    public function findByGooglePlaceId(string $googlePlaceId): ?Venue
+    {
+        return Venue::where('google_place_id', $googlePlaceId)->first();
+    }
+
     public function create(array $data): Venue
     {
         return Venue::create($data);

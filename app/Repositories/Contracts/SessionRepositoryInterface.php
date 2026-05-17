@@ -14,4 +14,8 @@ interface SessionRepositoryInterface
     public function markExpired(): int;
 
     public function updateMidpoint(string $sessionId, MidpointResult $result): Session;
+
+    public function confirmVenue(string $sessionId, string $placeId): Session;
+
+    public function resetMidpoint(string $sessionId): void;
 }
