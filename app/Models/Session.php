@@ -25,6 +25,8 @@ class Session extends Model
         'midpoint_calculated_at',
         'midpoint_is_fair',
         'midpoint_travel_times',
+        'session_confirmed_venue',
+        'session_confirmed_at',
     ];
 
     protected $casts = [
@@ -35,6 +37,7 @@ class Session extends Model
         'midpoint_calculated_at' => 'datetime',
         'midpoint_is_fair'       => 'boolean',
         'midpoint_travel_times'  => 'array',
+        'session_confirmed_at'   => 'datetime',
     ];
 
     public function participants(): HasMany
