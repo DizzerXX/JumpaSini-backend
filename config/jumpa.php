@@ -2,6 +2,12 @@
 
 return [
 
+    'urls' => [
+        'app'            => env('APP_URL', 'http://localhost:8000'),
+        'frontend'       => env('FRONTEND_URL', 'http://localhost:4200'),
+        'shareable_base' => env('FRONTEND_URL', 'http://localhost:4200') . '/session/',
+    ],
+
     'boundary' => [
         'lat_min' => 2.6000,
         'lat_max' => 3.9000,

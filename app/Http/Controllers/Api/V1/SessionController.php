@@ -82,6 +82,10 @@ class SessionController extends Controller
             'longitude'  => $request->longitude,
         ]);
 
+        if ($session->midpoint_lat !== null) {
+            $this->sessionRepository->resetMidpoint($session->id);
+        }
+
         $session->load('participants');
 
         return $this->successResponse(

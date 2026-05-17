@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -29,6 +30,8 @@ class Session extends Model
         'session_confirmed_at',
     ];
 
+    protected $appends = ['shareable_url'];
+
     protected $casts = [
         'halal_filter'           => 'boolean',
         'expires_at'             => 'datetime',
@@ -39,6 +42,13 @@ class Session extends Model
         'midpoint_travel_times'  => 'array',
         'session_confirmed_at'   => 'datetime',
     ];
+
+    public function shareableUrl(): Attribute
+    {
+        return Attribute::get(
+            fn () => config('jumpa.urls.shareable_base') . $this->short_code
+        );
+    }
 
     public function participants(): HasMany
     {
