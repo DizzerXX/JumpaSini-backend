@@ -34,6 +34,7 @@ class VenueDiscoveryService
         string $venueType,
         bool   $halalFilter,
         string $transportMode,
+        array  $participants = [],
     ): array {
         $config = self::GOOGLE_TYPE_MAP[$venueType] ?? ['query' => $venueType, 'useText' => true];
 
@@ -65,8 +66,11 @@ class VenueDiscoveryService
             $all[] = VenueResult::fromSeeded($venue, $lat, $lng);
         }
 
-        // Step 5 — rank and return top N
+        // Step 5 — rank top N (also sets score on each VenueResult)
         $ranked = $this->rankVenues($all);
+
+        // Step 6 — enrich with per-participant travel times
+        $this->enrichWithTravelTimes($ranked, $participants, $transportMode);
 
         return array_map(static fn(VenueResult $v) => $v->toArray(), $ranked);
     }
@@ -117,8 +121,10 @@ class VenueDiscoveryService
             $ratingScore   = (($venue->rating ?? 0) / 5.0) * 0.6;
             $normDist      = $venue->distanceMeters / $maxDist;
             $distanceScore = (1 - $normDist) * 0.4;
+            $score         = $ratingScore + $distanceScore;
+            $venue->score  = $score;
 
-            return ['venue' => $venue, 'score' => $ratingScore + $distanceScore];
+            return ['venue' => $venue, 'score' => $score];
         }, $venues);
 
         usort($scored, static fn(array $a, array $b) => $b['score'] <=> $a['score']);
@@ -127,5 +133,59 @@ class VenueDiscoveryService
             static fn(array $item) => $item['venue'],
             array_slice($scored, 0, self::TOP_N)
         );
+    }
+
+    /**
+     * Enrich each VenueResult with per-participant travel times via Distance Matrix API.
+     * On API failure the venue's travelTimes stays as an empty array.
+     *
+     * @param  VenueResult[] $venues
+     * @param  array         $participants  Participant model instances
+     */
+    private function enrichWithTravelTimes(array $venues, array $participants, string $transportMode): void
+    {
+        if (empty($participants) || empty($venues)) {
+            return;
+        }
+
+        $origins = array_map(
+            static fn($p) => ['lat' => (float) $p->latitude, 'lng' => (float) $p->longitude],
+            $participants
+        );
+
+        foreach ($venues as $venue) {
+            try {
+                $rows = $this->mapsClient->distanceMatrix(
+                    origins:      $origins,
+                    destinations: [['lat' => $venue->lat, 'lng' => $venue->lng]],
+                    mode:         $transportMode,
+                );
+
+                $travelTimes       = [];
+                $minSeconds        = PHP_INT_MAX;
+                $bestParticipantId = null;
+
+                foreach ($participants as $i => $participant) {
+                    $element = $rows[$i]['elements'][0] ?? null;
+
+                    if ($element && ($element['status'] ?? '') === 'OK') {
+                        $seconds = (int) ($element['duration']['value'] ?? 0);
+                        $text    = (string) ($element['duration']['text'] ?? '');
+
+                        $travelTimes[$participant->id] = ['seconds' => $seconds, 'text' => $text];
+
+                        if ($seconds < $minSeconds) {
+                            $minSeconds        = $seconds;
+                            $bestParticipantId = $participant->id;
+                        }
+                    }
+                }
+
+                $venue->travelTimes        = $travelTimes;
+                $venue->bestForParticipant = $bestParticipantId;
+            } catch (\Throwable) {
+                // Leave travelTimes empty if API call fails
+            }
+        }
     }
 }

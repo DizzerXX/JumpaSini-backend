@@ -20,6 +20,10 @@ class VenueResult
     public ?string $photoUrl;
     public string $googleMapsUrl;
     public string $source;
+    public array $travelTimes = [];
+    public ?string $bestForParticipant = null;
+    public bool $isBestPick = false;
+    public float $score = 0.0;
 
     public static function fromGoogle(array $place, float $midLat, float $midLng): self
     {
@@ -81,19 +85,23 @@ class VenueResult
     public function toArray(): array
     {
         return [
-            'place_id'          => $this->placeId,
-            'name'              => $this->name,
-            'address'           => $this->address,
-            'lat'               => $this->lat,
-            'lng'               => $this->lng,
-            'type'              => $this->type,
-            'rating'            => $this->rating,
-            'is_halal'          => $this->isHalal,
-            'is_halal_verified' => $this->isHalalVerified,
-            'distance_meters'   => $this->distanceMeters,
-            'photo_url'         => $this->photoUrl,
-            'google_maps_url'   => $this->googleMapsUrl,
-            'source'            => $this->source,
+            'place_id'             => $this->placeId,
+            'name'                 => $this->name,
+            'address'              => $this->address,
+            'lat'                  => $this->lat,
+            'lng'                  => $this->lng,
+            'type'                 => $this->type,
+            'rating'               => $this->rating,
+            'is_halal'             => $this->isHalal,
+            'is_halal_verified'    => $this->isHalalVerified,
+            'distance_meters'      => $this->distanceMeters,
+            'photo_url'            => $this->photoUrl,
+            'google_maps_url'      => $this->googleMapsUrl,
+            'source'               => $this->source,
+            'travel_times'         => $this->travelTimes,
+            'best_for_participant' => $this->bestForParticipant,
+            'is_best_pick'         => $this->isBestPick,
+            'score'                => round($this->score, 4),
         ];
     }
 }

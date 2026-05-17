@@ -7,6 +7,7 @@ use App\Http\Requests\Api\V1\ReportHalalRequest;
 use App\Models\Venue;
 use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Repositories\Contracts\VenueHalalReportRepositoryInterface;
+use App\Services\Venue\BestPickService;
 use App\Services\Venue\VenueDiscoveryService;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
@@ -16,9 +17,10 @@ class VenueController extends Controller
     use ApiResponseTrait;
 
     public function __construct(
-        private readonly SessionRepositoryInterface        $sessionRepository,
-        private readonly VenueDiscoveryService             $venueDiscovery,
-        private readonly VenueHalalReportRepositoryInterface $reportRepository,
+        private readonly SessionRepositoryInterface           $sessionRepository,
+        private readonly VenueDiscoveryService                $venueDiscovery,
+        private readonly VenueHalalReportRepositoryInterface  $reportRepository,
+        private readonly BestPickService                      $bestPickService,
     ) {}
 
     public function index(string $shortCode): JsonResponse
@@ -37,13 +39,18 @@ class VenueController extends Controller
             );
         }
 
+        $session->load('participants');
+
         $venues = $this->venueDiscovery->discover(
-            lat:           (float) $session->midpoint_lat,
-            lng:           (float) $session->midpoint_lng,
-            venueType:     $session->venue_type,
-            halalFilter:   (bool) $session->halal_filter,
+            lat:          (float) $session->midpoint_lat,
+            lng:          (float) $session->midpoint_lng,
+            venueType:    $session->venue_type,
+            halalFilter:  (bool) $session->halal_filter,
             transportMode: $session->transport_mode,
+            participants: $session->participants->all(),
         );
+
+        $venues = $this->bestPickService->selectBestPick($venues);
 
         return $this->successResponse($venues, 'Venues retrieved successfully.');
     }
