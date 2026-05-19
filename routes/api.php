@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\AdminController;
+use App\Http\Controllers\Api\V1\Admin\AnalyticsController;
 use App\Http\Controllers\Api\V1\Admin\VenueManagementController;
 use App\Http\Controllers\Api\V1\CollaborationController;
 use App\Http\Controllers\Api\V1\RecommendationController;
@@ -41,6 +42,14 @@ Route::prefix('v1')->group(function () {
             Route::patch('venues/{id}/halal', [VenueManagementController::class, 'updateHalal']);
             Route::get('venues/{id}/halal-reports', [VenueManagementController::class, 'halalReports']);
             Route::post('venues/{id}/halal-override', [VenueManagementController::class, 'halalOverride']);
+
+            // Analytics
+            Route::prefix('analytics')->group(function () {
+                Route::get('overview', [AnalyticsController::class, 'overview']);
+                Route::get('sessions', [AnalyticsController::class, 'sessions']);
+                Route::get('venues', [AnalyticsController::class, 'venues']);
+                Route::get('halal-reports', [AnalyticsController::class, 'halalReports']);
+            });
         });
     });
 });

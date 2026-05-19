@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Repositories\AnalyticsRepository;
+use App\Repositories\Contracts\AnalyticsRepositoryInterface;
 use App\Repositories\Contracts\ParticipantRepositoryInterface;
 use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Repositories\Contracts\VenueHalalReportRepositoryInterface;
@@ -23,5 +25,6 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->bind(VenueRepositoryInterface::class, VenueRepository::class);
         $this->app->bind(VenueHalalReportRepositoryInterface::class, VenueHalalReportRepository::class);
         $this->app->bind(VenueVoteRepositoryInterface::class, VenueVoteRepository::class);
+        $this->app->bind(AnalyticsRepositoryInterface::class, AnalyticsRepository::class);
     }
 }
