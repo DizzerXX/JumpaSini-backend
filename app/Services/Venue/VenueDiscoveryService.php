@@ -5,6 +5,7 @@ namespace App\Services\Venue;
 use App\Helpers\GeoHelper;
 use App\Repositories\Contracts\VenueRepositoryInterface;
 use App\Services\GoogleMaps\CachedGoogleMapsClient;
+use App\Services\Weather\WeatherAssessmentService;
 
 class VenueDiscoveryService
 {
@@ -24,8 +25,9 @@ class VenueDiscoveryService
     ];
 
     public function __construct(
-        private readonly CachedGoogleMapsClient $mapsClient,
-        private readonly VenueRepositoryInterface $venueRepository,
+        private readonly CachedGoogleMapsClient    $mapsClient,
+        private readonly VenueRepositoryInterface  $venueRepository,
+        private readonly WeatherAssessmentService  $weatherAssessment,
     ) {}
 
     public function discover(
@@ -72,7 +74,22 @@ class VenueDiscoveryService
         // Step 6 — enrich with per-participant travel times
         $this->enrichWithTravelTimes($ranked, $participants, $transportMode);
 
-        return array_map(static fn(VenueResult $v) => $v->toArray(), $ranked);
+        // Step 7 — weather assessment (outdoor venue types only)
+        $outdoorTypes = (array) config('jumpa.weather.outdoor_types', []);
+        $weather      = null;
+
+        if (in_array($venueType, $outdoorTypes, true) && config('jumpa.weather.enabled', true)) {
+            try {
+                $weather = $this->weatherAssessment->assess($lat, $lng, $venueType);
+            } catch (\Throwable) {
+                // Weather failure must not block venue results
+            }
+        }
+
+        return [
+            'venues'  => array_map(static fn(VenueResult $v) => $v->toArray(), $ranked),
+            'weather' => $weather,
+        ];
     }
 
     private function fetchFromGoogle(float $lat, float $lng, string $venueType, array $config, bool $halalFilter): array

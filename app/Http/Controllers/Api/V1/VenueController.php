@@ -9,6 +9,7 @@ use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Repositories\Contracts\VenueHalalReportRepositoryInterface;
 use App\Services\Venue\BestPickService;
 use App\Services\Venue\VenueDiscoveryService;
+use App\Services\Weather\WeatherAssessment;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
 
@@ -41,18 +42,40 @@ class VenueController extends Controller
 
         $session->load('participants');
 
-        $venues = $this->venueDiscovery->discover(
-            lat:          (float) $session->midpoint_lat,
-            lng:          (float) $session->midpoint_lng,
-            venueType:    $session->venue_type,
-            halalFilter:  (bool) $session->halal_filter,
+        $result = $this->venueDiscovery->discover(
+            lat:           (float) $session->midpoint_lat,
+            lng:           (float) $session->midpoint_lng,
+            venueType:     $session->venue_type,
+            halalFilter:   (bool) $session->halal_filter,
             transportMode: $session->transport_mode,
-            participants: $session->participants->all(),
+            participants:  $session->participants->all(),
         );
 
-        $venues = $this->bestPickService->selectBestPick($venues);
+        $venues  = $this->bestPickService->selectBestPick($result['venues']);
+        $weather = $result['weather'];
 
-        return $this->successResponse($venues, 'Venues retrieved successfully.');
+        return $this->successResponse(
+            [
+                'venues'  => $venues,
+                'weather' => $weather ? $this->formatWeather($weather) : null,
+            ],
+            'Venues retrieved successfully.'
+        );
+    }
+
+    private function formatWeather(WeatherAssessment $w): array
+    {
+        return [
+            'severity'    => $w->severity,
+            'headline'    => $w->headline,
+            'message'     => $w->message,
+            'emoji'       => $w->emoji,
+            'should_warn' => $w->shouldWarn,
+            'is_safe'     => $w->isSafe,
+            'temperature' => $w->temperature,
+            'humidity'    => $w->humidity,
+            'forecast'    => $w->forecast,
+        ];
     }
 
     public function reportHalal(ReportHalalRequest $request, string $placeId): JsonResponse
