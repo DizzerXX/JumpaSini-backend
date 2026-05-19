@@ -39,7 +39,7 @@ class RecommendationController extends Controller
 
         $session->load('participants');
 
-        $venues = $this->venueDiscovery->discover(
+        $result = $this->venueDiscovery->discover(
             lat:           (float) $session->midpoint_lat,
             lng:           (float) $session->midpoint_lng,
             venueType:     $session->venue_type,
@@ -48,7 +48,7 @@ class RecommendationController extends Controller
             participants:  $session->participants->all(),
         );
 
-        $venues = $this->bestPickService->selectBestPick($venues);
+        $venues = $this->bestPickService->selectBestPick($result['venues']);
 
         $recommendation = $this->recommendationService->buildRecommendation($session, $venues);
 

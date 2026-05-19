@@ -65,7 +65,7 @@ class VenueTest extends TestCase
         $venues = array_map(fn(int $i) => $this->fakeVenueArray("Venue {$i}"), range(1, 5));
 
         $this->mock(VenueDiscoveryService::class, function (MockInterface $mock) use ($venues) {
-            $mock->shouldReceive('discover')->once()->andReturn($venues);
+            $mock->shouldReceive('discover')->once()->andReturn(['venues' => $venues, 'weather' => null]);
         });
 
         $session  = $this->sessionWithMidpoint();
@@ -74,10 +74,10 @@ class VenueTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonPath('success', true);
 
-        $data = $response->json('data');
-        $this->assertCount(5, $data);
+        $venueList = $response->json('data.venues');
+        $this->assertCount(5, $venueList);
 
-        foreach ($data as $venue) {
+        foreach ($venueList as $venue) {
             $this->assertArrayHasKey('name', $venue);
             $this->assertArrayHasKey('lat', $venue);
             $this->assertArrayHasKey('lng', $venue);
@@ -96,7 +96,7 @@ class VenueTest extends TestCase
                 ->once()
                 ->andReturnUsing(function ($lat, $lng, $venueType, $halalFilter, $transportMode) use (&$capturedHalalFilter) {
                     $capturedHalalFilter = $halalFilter;
-                    return [];
+                    return ['venues' => [], 'weather' => null];
                 });
         });
 

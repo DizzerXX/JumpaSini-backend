@@ -79,7 +79,7 @@ class RecommendationTest extends TestCase
         $fakeVenues  = [$bestVenue, $otherVenue];
 
         $this->mock(VenueDiscoveryService::class, function (MockInterface $mock) use ($fakeVenues) {
-            $mock->shouldReceive('discover')->once()->andReturn($fakeVenues);
+            $mock->shouldReceive('discover')->once()->andReturn(['venues' => $fakeVenues, 'weather' => null]);
         });
 
         $this->mock(BestPickService::class, function (MockInterface $mock) use ($fakeVenues) {
@@ -136,20 +136,20 @@ class RecommendationTest extends TestCase
 
         $response->assertStatus(200);
 
-        $data = $response->json('data');
-        $this->assertNotEmpty($data);
+        $venues = $response->json('data.venues');
+        $this->assertNotEmpty($venues);
 
-        foreach ($data as $venue) {
+        foreach ($venues as $venue) {
             $this->assertArrayHasKey('travel_times', $venue);
             $this->assertArrayHasKey('is_best_pick', $venue);
         }
 
         // Exactly one venue must be marked best pick
-        $bestCount = count(array_filter($data, static fn($v) => $v['is_best_pick'] === true));
+        $bestCount = count(array_filter($venues, static fn($v) => $v['is_best_pick'] === true));
         $this->assertSame(1, $bestCount);
 
         // Travel times keyed by participant ID must be present on each venue
-        foreach ($data as $venue) {
+        foreach ($venues as $venue) {
             $this->assertArrayHasKey($p1->id, $venue['travel_times']);
             $this->assertArrayHasKey($p2->id, $venue['travel_times']);
             $this->assertSame(1200, $venue['travel_times'][$p1->id]['seconds']);

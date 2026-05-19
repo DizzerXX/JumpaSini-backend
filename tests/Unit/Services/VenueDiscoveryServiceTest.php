@@ -8,6 +8,7 @@ use App\Repositories\Contracts\VenueRepositoryInterface;
 use App\Services\GoogleMaps\CachedGoogleMapsClient;
 use App\Services\Venue\VenueDiscoveryService;
 use App\Services\Venue\VenueResult;
+use App\Services\Weather\WeatherAssessmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -21,6 +22,7 @@ class VenueDiscoveryServiceTest extends TestCase
         return new VenueDiscoveryService(
             $maps ?? Mockery::mock(CachedGoogleMapsClient::class),
             app(VenueRepositoryInterface::class),
+            Mockery::mock(WeatherAssessmentService::class),
         );
     }
 
@@ -96,9 +98,11 @@ class VenueDiscoveryServiceTest extends TestCase
         $mockMaps->shouldReceive('textSearch')->andReturn([]);
         $mockMaps->shouldReceive('nearbySearch')->andReturn([]);
 
-        $service = new VenueDiscoveryService($mockMaps, app(VenueRepositoryInterface::class));
+        $mockWeather = Mockery::mock(WeatherAssessmentService::class);
 
-        $results = $service->discover(
+        $service = new VenueDiscoveryService($mockMaps, app(VenueRepositoryInterface::class), $mockWeather);
+
+        $result = $service->discover(
             lat:           3.1579,
             lng:           101.7119,
             venueType:     'restaurant',
@@ -106,7 +110,7 @@ class VenueDiscoveryServiceTest extends TestCase
             transportMode: 'car',
         );
 
-        $names = array_column($results, 'name');
+        $names = array_column($result['venues'], 'name');
 
         $this->assertContains('Halal Place', $names);
         $this->assertNotContains('Non-Halal Place', $names);
