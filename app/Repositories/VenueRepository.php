@@ -4,9 +4,8 @@ namespace App\Repositories;
 
 use App\Models\Venue;
 use App\Repositories\Contracts\VenueRepositoryInterface;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
-
 class VenueRepository implements VenueRepositoryInterface
 {
     public function findNearMidpoint(float $lat, float $lng, string $type, int $radiusMeters): Collection
@@ -48,5 +47,51 @@ class VenueRepository implements VenueRepositoryInterface
         $venue->update($data);
 
         return $venue->fresh();
+    }
+
+    public function paginateForAdmin(array $filters, int $perPage = 20): LengthAwarePaginator
+    {
+        $query = Venue::query();
+
+        if (!empty($filters['type'])) {
+            $query->where('type', $filters['type']);
+        }
+
+        if (isset($filters['halal'])) {
+            if ($filters['halal'] === 'unverified') {
+                $query->whereNull('is_halal');
+            } elseif ($filters['halal'] === 'true' || $filters['halal'] === true) {
+                $query->where('is_halal', true);
+            } elseif ($filters['halal'] === 'false' || $filters['halal'] === false) {
+                $query->where('is_halal', false);
+            }
+        }
+
+        if (!empty($filters['search'])) {
+            $term = '%' . $filters['search'] . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('name', 'like', $term)
+                  ->orWhere('address', 'like', $term);
+            });
+        }
+
+        return $query->latest()->paginate($perPage);
+    }
+
+    public function findById(string $id): ?Venue
+    {
+        return Venue::find($id);
+    }
+
+    public function update(Venue $venue, array $data): Venue
+    {
+        $venue->update($data);
+
+        return $venue->fresh();
+    }
+
+    public function softDelete(Venue $venue): void
+    {
+        $venue->update(['is_active' => false]);
     }
 }

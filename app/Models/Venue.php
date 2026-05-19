@@ -27,6 +27,7 @@ class Venue extends Model
         'opening_hours',
         'photo_reference',
         'is_active',
+        'admin_notes',
     ];
 
     protected $casts = [

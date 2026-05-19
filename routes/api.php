@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\AdminController;
+use App\Http\Controllers\Api\V1\Admin\VenueManagementController;
 use App\Http\Controllers\Api\V1\CollaborationController;
 use App\Http\Controllers\Api\V1\RecommendationController;
 use App\Http\Controllers\Api\V1\SessionController;
@@ -31,6 +32,15 @@ Route::prefix('v1')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
             Route::post('logout', [AdminController::class, 'logout']);
             Route::get('me', [AdminController::class, 'me']);
+
+            // Venue management
+            Route::get('venues', [VenueManagementController::class, 'index']);
+            Route::post('venues', [VenueManagementController::class, 'store']);
+            Route::put('venues/{id}', [VenueManagementController::class, 'update']);
+            Route::delete('venues/{id}', [VenueManagementController::class, 'destroy']);
+            Route::patch('venues/{id}/halal', [VenueManagementController::class, 'updateHalal']);
+            Route::get('venues/{id}/halal-reports', [VenueManagementController::class, 'halalReports']);
+            Route::post('venues/{id}/halal-override', [VenueManagementController::class, 'halalOverride']);
         });
     });
 });
