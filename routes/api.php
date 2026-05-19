@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\AdminController;
 use App\Http\Controllers\Api\V1\CollaborationController;
 use App\Http\Controllers\Api\V1\RecommendationController;
 use App\Http\Controllers\Api\V1\SessionController;
@@ -8,6 +9,7 @@ use App\Http\Controllers\Api\V1\WeatherController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
+    // ─── Public Session Routes ────────────────────────────────────────────────
     Route::post('sessions', [SessionController::class, 'store']);
     Route::get('sessions/{short_code}', [SessionController::class, 'show']);
     Route::post('sessions/{short_code}/participants', [SessionController::class, 'addParticipant']);
@@ -21,4 +23,14 @@ Route::prefix('v1')->group(function () {
     Route::get('sessions/{short_code}/summary', [CollaborationController::class, 'summary']);
     Route::get('sessions/{short_code}/weather', [WeatherController::class, 'show']);
     Route::post('venues/{place_id}/halal-report', [VenueController::class, 'reportHalal']);
+
+    // ─── Admin Routes ─────────────────────────────────────────────────────────
+    Route::prefix('admin')->group(function () {
+        Route::post('login', [AdminController::class, 'login']);
+
+        Route::middleware('auth:sanctum')->group(function () {
+            Route::post('logout', [AdminController::class, 'logout']);
+            Route::get('me', [AdminController::class, 'me']);
+        });
+    });
 });
