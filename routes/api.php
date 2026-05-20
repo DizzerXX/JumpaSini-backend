@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\V1\VenueController;
 use App\Http\Controllers\Api\V1\WeatherController;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/v1/health', fn() => response()->json(['status' => 'ok']));
+
 Route::prefix('v1')->group(function () {
     // ─── Public Session Routes ────────────────────────────────────────────────
     Route::post('sessions', [SessionController::class, 'store']);
