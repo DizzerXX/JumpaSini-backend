@@ -8,10 +8,13 @@ RUN apk add --no-cache \
     libzip-dev \
     oniguruma-dev \
     mariadb-dev \
+    libpq-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         pdo \
         pdo_mysql \
+        pdo_pgsql \
+        pgsql \
         mbstring \
         exif \
         pcntl \
