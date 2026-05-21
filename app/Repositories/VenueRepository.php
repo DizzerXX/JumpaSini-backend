@@ -6,24 +6,29 @@ use App\Models\Venue;
 use App\Repositories\Contracts\VenueRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 class VenueRepository implements VenueRepositoryInterface
 {
     public function findNearMidpoint(float $lat, float $lng, string $type, int $radiusMeters): Collection
     {
-        // Haversine formula in raw SQL to find venues within radius
-        return Venue::active()
-            ->byType($type)
-            ->selectRaw(
-                '*, ( 6371000 * acos(
+        $haversine = '6371000 * acos(
                     cos(radians(?)) * cos(radians(latitude)) *
                     cos(radians(longitude) - radians(?)) +
                     sin(radians(?)) * sin(radians(latitude))
-                )) AS distance_meters',
-                [$lat, $lng, $lat]
-            )
-            ->having('distance_meters', '<=', $radiusMeters)
+                )';
+
+        $inner = Venue::active()
+            ->byType($type)
+            ->selectRaw("*, ($haversine) AS distance_meters", [$lat, $lng, $lat])
+            ->toBase();
+
+        $rows = DB::query()
+            ->fromSub($inner, 'subquery')
+            ->where('distance_meters', '<=', $radiusMeters)
             ->orderBy('distance_meters')
             ->get();
+
+        return Venue::hydrate($rows->map(fn ($r) => (array) $r)->all());
     }
 
     public function findByType(string $type): Collection
