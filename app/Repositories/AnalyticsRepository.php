@@ -24,7 +24,7 @@ class AnalyticsRepository implements AnalyticsRepositoryInterface
             ->values()
             ->toArray();
 
-        $popularAreas = Participant::selectRaw('TRIM(SUBSTRING_INDEX(address, ",", -1)) as area, COUNT(*) as count')
+        $popularAreas = Participant::selectRaw("TRIM(SPLIT_PART(address, ',', array_length(string_to_array(address, ','), 1))) as area, COUNT(*) as count")
             ->groupBy('area')
             ->orderByDesc('count')
             ->limit(10)
@@ -99,9 +99,9 @@ class AnalyticsRepository implements AnalyticsRepositoryInterface
             'venue_id',
             'google_place_id',
             DB::raw('COUNT(*) as total_reports'),
-            DB::raw('SUM(reported_as_halal) as halal_reports')
+            DB::raw('SUM(reported_as_halal::int) as halal_reports')
         )
-            ->groupBy('venue_key', 'venue_id', 'google_place_id')
+            ->groupBy(DB::raw('COALESCE(venue_id, google_place_id)'), 'venue_id', 'google_place_id')
             ->orderByDesc('total_reports')
             ->limit(10)
             ->get()
