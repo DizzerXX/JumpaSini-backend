@@ -41,6 +41,7 @@ class SummaryService
             'confirmed_venue'  => $confirmedVenue,
             'vote_summary'     => $voteSummary,
             'recommendation'   => $recommendation,
+            'voting_state'     => $this->buildVotingState($session, $voteSummary),
             'is_complete'      => $session->status === 'completed',
             'expires_at'       => $session->expires_at?->toIso8601String(),
         ];
@@ -60,6 +61,49 @@ class SummaryService
             'expires_at'              => $session->expires_at?->toIso8601String(),
             'shareable_url'           => $session->shareable_url,
         ];
+    }
+
+    private function buildVotingState(Session $session, array $voteSummary): array
+    {
+        $now    = now();
+        $active = $session->voting_starts_at !== null
+               && $session->voting_ends_at !== null
+               && $session->voting_starts_at->lte($now)
+               && $session->voting_ends_at->gte($now);
+
+        $secondsRemaining = ($session->voting_ends_at !== null && $session->voting_ends_at->gte($now))
+            ? (int) $now->diffInSeconds($session->voting_ends_at)
+            : 0;
+
+        $winningVenue = $this->resolveWinningVenue($voteSummary);
+
+        return [
+            'active'                    => $active,
+            'ends_at'                   => $session->voting_ends_at?->toIso8601String(),
+            'seconds_remaining'         => $secondsRemaining,
+            'winning_venue'             => $winningVenue,
+            'voting_confirmed_venue'    => $session->voting_confirmed_venue,
+        ];
+    }
+
+    private function resolveWinningVenue(array $voteSummary): ?string
+    {
+        if (empty($voteSummary)) {
+            return null;
+        }
+
+        $best      = null;
+        $bestScore = -1;
+
+        foreach ($voteSummary as $placeId => $counts) {
+            $score = ($counts['up'] ?? 0) - ($counts['down'] ?? 0);
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $best      = $placeId;
+            }
+        }
+
+        return $best;
     }
 
     private function resolveConfirmedVenue(Session $session): ?array

@@ -31,6 +31,11 @@ return [
         'max' => 6,
     ],
 
+    'voting' => [
+        'duration_minutes' => env('VOTING_DURATION_MINUTES', 5),
+        'enabled'          => env('VOTING_ENABLED', true),
+    ],
+
     'weather' => [
         'enabled'              => env('WEATHER_ENABLED', true),
         'outdoor_types'        => ['park', 'beach', 'waterfall', 'river'],

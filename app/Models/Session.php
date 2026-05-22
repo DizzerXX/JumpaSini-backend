@@ -28,6 +28,9 @@ class Session extends Model
         'midpoint_travel_times',
         'session_confirmed_venue',
         'session_confirmed_at',
+        'voting_starts_at',
+        'voting_ends_at',
+        'voting_confirmed_venue',
     ];
 
     protected $appends = ['shareable_url'];
@@ -41,6 +44,8 @@ class Session extends Model
         'midpoint_is_fair'       => 'boolean',
         'midpoint_travel_times'  => 'array',
         'session_confirmed_at'   => 'datetime',
+        'voting_starts_at'       => 'datetime',
+        'voting_ends_at'         => 'datetime',
     ];
 
     public function shareableUrl(): Attribute
