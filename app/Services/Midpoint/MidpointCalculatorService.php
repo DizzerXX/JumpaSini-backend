@@ -78,6 +78,19 @@ class MidpointCalculatorService
         // Reindex to guarantee 0-based integer keys throughout
         $participants = array_values($participants);
 
+        if (count($participants) === 1) {
+            $p = $participants[0];
+
+            return MidpointResult::make([
+                'lat'            => (float) $p->latitude,
+                'lng'            => (float) $p->longitude,
+                'travel_times'   => [$p->id => 0],
+                'is_fair'        => true,
+                'iterations'     => 0,
+                'transport_mode' => $transportMode,
+            ]);
+        }
+
         $coords = array_map(
             static fn($p): array => ['lat' => (float) $p->latitude, 'lng' => (float) $p->longitude],
             $participants

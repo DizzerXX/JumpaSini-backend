@@ -27,7 +27,7 @@ return [
     ],
 
     'participants' => [
-        'min' => 2,
+        'min' => 1,
         'max' => 6,
     ],
 

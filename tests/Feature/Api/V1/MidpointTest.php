@@ -60,10 +60,9 @@ class MidpointTest extends TestCase
 
     // ─── Tests ───────────────────────────────────────────────────────────────
 
-    public function test_cannot_calculate_midpoint_with_less_than_two_participants(): void
+    public function test_cannot_calculate_midpoint_with_no_participants(): void
     {
         $session = Session::factory()->create();
-        Participant::factory()->create(['session_id' => $session->id]);
 
         $response = $this->postJson("/api/v1/sessions/{$session->short_code}/midpoint");
 

@@ -175,9 +175,9 @@ class CollaborationTest extends TestCase
         $this->assertStringContainsString($session->short_code, $shareableUrl);
     }
 
-    // ─── Test 7: Adding participant resets midpoint ───────────────────────────
+    // ─── Test 7: Adding participant triggers auto-recalculation ──────────────
 
-    public function test_adding_participant_to_session_with_midpoint_resets_midpoint(): void
+    public function test_adding_participant_to_session_triggers_recalculation(): void
     {
         $session = $this->sessionWithMidpoint();
 
@@ -193,10 +193,16 @@ class CollaborationTest extends TestCase
             'longitude' => 101.6719,
         ])->assertStatus(201);
 
+        // Recalculation runs synchronously (QUEUE_CONNECTION=sync).
+        // With 1 participant the midpoint becomes that participant's own location.
         $this->assertDatabaseHas('sessions', [
-            'id'           => $session->id,
-            'midpoint_lat' => null,
-            'midpoint_lng' => null,
+            'id'     => $session->id,
+            'status' => 'active',
         ]);
+
+        $session->refresh();
+        $this->assertNotNull($session->midpoint_lat);
+        $this->assertEqualsWithDelta(3.1298, (float) $session->midpoint_lat, 0.0001);
+        $this->assertEqualsWithDelta(101.6719, (float) $session->midpoint_lng, 0.0001);
     }
 }

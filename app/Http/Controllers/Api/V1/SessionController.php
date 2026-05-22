@@ -7,6 +7,7 @@ use App\Http\Requests\Api\V1\AddParticipantRequest;
 use App\Http\Requests\Api\V1\CreateSessionRequest;
 use App\Http\Resources\ParticipantResource;
 use App\Http\Resources\SessionResource;
+use App\Jobs\RecalculateMidpointJob;
 use App\Repositories\Contracts\ParticipantRepositoryInterface;
 use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Services\Midpoint\MidpointCalculatorService;
@@ -82,11 +83,9 @@ class SessionController extends Controller
             'longitude'  => $request->longitude,
         ]);
 
-        if ($session->midpoint_lat !== null) {
-            $this->sessionRepository->resetMidpoint($session->id);
-        }
+        dispatch(new RecalculateMidpointJob($session->id));
 
-        $session->load('participants');
+        $session->refresh()->load('participants');
 
         return $this->successResponse(
             [
@@ -108,9 +107,9 @@ class SessionController extends Controller
 
         $participants = $this->participantRepository->findBySession($session->id);
 
-        if ($participants->count() < 2) {
+        if ($participants->count() < 1) {
             return $this->errorResponse(
-                'At least 2 participants are required to calculate a midpoint.',
+                'At least 1 participant is required to calculate a midpoint.',
                 null,
                 422
             );
