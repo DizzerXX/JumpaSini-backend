@@ -7,13 +7,13 @@ use App\Http\Requests\Api\V1\AddParticipantRequest;
 use App\Http\Requests\Api\V1\CreateSessionRequest;
 use App\Http\Resources\ParticipantResource;
 use App\Http\Resources\SessionResource;
-use App\Jobs\RecalculateMidpointJob;
 use App\Repositories\Contracts\ParticipantRepositoryInterface;
 use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Services\Midpoint\MidpointCalculatorService;
 use App\Services\ShortCodeService;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 class SessionController extends Controller
 {
@@ -83,9 +83,25 @@ class SessionController extends Controller
             'longitude'  => $request->longitude,
         ]);
 
-        dispatch(new RecalculateMidpointJob($session->id));
-
         $session->refresh()->load('participants');
+
+        try {
+            $participants = $this->participantRepository->findBySession($session->id);
+
+            if ($participants->count() >= 1) {
+                $result = $this->midpointCalculator->calculate(
+                    $participants->all(),
+                    $session->transport_mode
+                );
+                $this->sessionRepository->updateMidpoint($session->id, $result);
+                $session->refresh()->load('participants');
+            }
+        } catch (\Exception $e) {
+            Log::error('Midpoint calculation failed', [
+                'session_id' => $session->id,
+                'error'      => $e->getMessage(),
+            ]);
+        }
 
         return $this->successResponse(
             [
