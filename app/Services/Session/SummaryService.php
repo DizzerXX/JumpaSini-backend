@@ -137,7 +137,7 @@ class SummaryService
         }
 
         try {
-            $venues = $this->venueDiscovery->discover(
+            $result = $this->venueDiscovery->discover(
                 lat:           (float) $session->midpoint_lat,
                 lng:           (float) $session->midpoint_lng,
                 venueType:     $session->venue_type,
@@ -146,9 +146,9 @@ class SummaryService
                 participants:  $session->participants->all(),
             );
 
-            $venues = $this->bestPickService->selectBestPick($venues);
+            $rankedVenues = $this->bestPickService->selectBestPick($result['venues']);
 
-            return $this->recommendationService->buildRecommendation($session, $venues);
+            return $this->recommendationService->buildRecommendation($session, $rankedVenues);
         } catch (\Throwable) {
             return null;
         }
