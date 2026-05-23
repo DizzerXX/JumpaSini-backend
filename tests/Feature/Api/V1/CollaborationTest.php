@@ -2,12 +2,14 @@
 
 namespace Tests\Feature\Api\V1;
 
+use App\Jobs\AutoConfirmVenueJob;
 use App\Models\Participant;
 use App\Models\Session;
 use App\Models\VenueVote;
 use App\Services\Venue\BestPickService;
 use App\Services\Venue\VenueDiscoveryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Mockery\MockInterface;
 use Tests\TestCase;
 
@@ -223,6 +225,91 @@ class CollaborationTest extends TestCase
         $this->assertNotNull($recommendation);
         $this->assertArrayHasKey('best_venue', $recommendation);
         $this->assertSame('Midpoint Cafe', $recommendation['best_venue']['name']);
+    }
+
+    // ─── Test 9: Voting start sets correct timestamps ─────────────────────────
+
+    public function test_voting_start_sets_correct_timestamps(): void
+    {
+        Queue::fake();
+
+        $session = Session::factory()->create();
+
+        $response = $this->postJson("/api/v1/sessions/{$session->short_code}/voting/start");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.voting_state.active', true);
+
+        $session->refresh();
+
+        $this->assertNotNull($session->voting_starts_at);
+        $this->assertNotNull($session->voting_ends_at);
+
+        $durationMinutes = (int) config('jumpa.voting.duration_minutes', 5);
+        $this->assertEqualsWithDelta(
+            $session->voting_starts_at->addMinutes($durationMinutes)->timestamp,
+            $session->voting_ends_at->timestamp,
+            2
+        );
+
+        Queue::assertPushed(AutoConfirmVenueJob::class, fn ($job) => true);
+    }
+
+    // ─── Test 10: Summary includes voting state ───────────────────────────────
+
+    public function test_summary_includes_voting_state(): void
+    {
+        Queue::fake();
+
+        $session = Session::factory()->create();
+        Participant::factory()->count(2)->create(['session_id' => $session->id]);
+
+        // Start voting
+        $this->postJson("/api/v1/sessions/{$session->short_code}/voting/start")
+            ->assertStatus(200);
+
+        $this->castVote($session, 'up', 'Danish', 'ChIJwinner');
+        $this->castVote($session, 'down', 'Ahmad', 'ChIJloser');
+
+        $response = $this->getJson("/api/v1/sessions/{$session->short_code}/summary");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $votingState = $response->json('data.voting_state');
+        $this->assertNotNull($votingState);
+        $this->assertTrue($votingState['active']);
+        $this->assertNotNull($votingState['ends_at']);
+        $this->assertGreaterThan(0, $votingState['seconds_remaining']);
+        $this->assertSame('ChIJwinner', $votingState['winning_venue']);
+    }
+
+    // ─── Test 11: Auto-confirm selects most voted venue ───────────────────────
+
+    public function test_auto_confirm_selects_most_voted_venue(): void
+    {
+        $session = Session::factory()->create([
+            'voting_starts_at' => now()->subMinutes(6),
+            'voting_ends_at'   => now()->subMinute(), // already ended
+        ]);
+
+        // Venue A: 3 up votes (winner)
+        $this->castVote($session, 'up', 'Danish', 'ChIJvenueA');
+        $this->castVote($session, 'up', 'Ahmad', 'ChIJvenueA');
+        $this->castVote($session, 'up', 'Siti', 'ChIJvenueA');
+
+        // Venue B: 1 up vote
+        $this->castVote($session, 'up', 'Zara', 'ChIJvenueB');
+
+        AutoConfirmVenueJob::dispatchSync($session->id);
+
+        $this->assertDatabaseHas('sessions', [
+            'id'                      => $session->id,
+            'voting_confirmed_venue'  => 'ChIJvenueA',
+            'session_confirmed_venue' => 'ChIJvenueA',
+            'status'                  => 'completed',
+        ]);
     }
 
     // ─── Test 8: Adding participant triggers auto-recalculation ──────────────

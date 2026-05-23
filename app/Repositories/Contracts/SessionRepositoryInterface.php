@@ -18,4 +18,8 @@ interface SessionRepositoryInterface
     public function confirmVenue(string $sessionId, string $placeId): Session;
 
     public function resetMidpoint(string $sessionId): void;
+
+    public function startVoting(string $sessionId, int $durationMinutes): Session;
+
+    public function autoConfirmVotingVenue(string $sessionId, string $placeId): Session;
 }

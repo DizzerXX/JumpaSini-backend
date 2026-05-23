@@ -24,6 +24,7 @@ Route::prefix('v1')->group(function () {
     Route::post('sessions/{short_code}/votes', [CollaborationController::class, 'castVote']);
     Route::get('sessions/{short_code}/votes', [CollaborationController::class, 'getVotes']);
     Route::post('sessions/{short_code}/confirm', [CollaborationController::class, 'confirmVenue']);
+    Route::post('sessions/{short_code}/voting/start', [CollaborationController::class, 'startVoting']);
     Route::get('sessions/{short_code}/summary', [CollaborationController::class, 'summary']);
     Route::get('sessions/{short_code}/weather', [WeatherController::class, 'show']);
     Route::post('venues/{place_id}/halal-report', [VenueController::class, 'reportHalal']);

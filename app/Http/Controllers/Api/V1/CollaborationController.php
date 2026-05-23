@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\CastVoteRequest;
 use App\Http\Requests\Api\V1\ConfirmVenueRequest;
 use App\Http\Resources\SessionResource;
+use App\Jobs\AutoConfirmVenueJob;
 use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Repositories\Contracts\VenueVoteRepositoryInterface;
 use App\Services\Session\SummaryService;
@@ -75,6 +76,37 @@ class CollaborationController extends Controller
             new SessionResource($session),
             'Venue confirmed successfully.'
         );
+    }
+
+    public function startVoting(string $shortCode): JsonResponse
+    {
+        $session = $this->sessionRepository->findByShortCode($shortCode);
+
+        if (!$session || $session->expires_at->isPast()) {
+            return $this->errorResponse('Session not found or has expired.', null, 404);
+        }
+
+        if (!config('jumpa.voting.enabled')) {
+            return $this->errorResponse('Voting is disabled.', null, 422);
+        }
+
+        if ($session->voting_starts_at !== null) {
+            return $this->errorResponse('Voting has already started for this session.', null, 422);
+        }
+
+        $durationMinutes = (int) config('jumpa.voting.duration_minutes', 5);
+        $session = $this->sessionRepository->startVoting($session->id, $durationMinutes);
+
+        // Dispatch auto-confirm job with delay equal to voting duration.
+        // With QUEUE_CONNECTION=sync (Render free tier), the delay is ignored and
+        // the job runs immediately — use the sessions:auto-confirm scheduled command
+        // as the reliable fallback. Upgrade to Redis for proper delayed job support.
+        AutoConfirmVenueJob::dispatch($session->id)
+            ->delay(now()->addMinutes($durationMinutes));
+
+        $summary = $this->summaryService->buildSummary($session);
+
+        return $this->successResponse($summary, 'Voting started successfully.');
     }
 
     public function summary(string $shortCode): JsonResponse

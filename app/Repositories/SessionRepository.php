@@ -66,4 +66,30 @@ class SessionRepository implements SessionRepositoryInterface
             'midpoint_travel_times'  => null,
         ]);
     }
+
+    public function startVoting(string $sessionId, int $durationMinutes): Session
+    {
+        $session = Session::findOrFail($sessionId);
+
+        $session->update([
+            'voting_starts_at' => now(),
+            'voting_ends_at'   => now()->addMinutes($durationMinutes),
+        ]);
+
+        return $session->fresh('participants');
+    }
+
+    public function autoConfirmVotingVenue(string $sessionId, string $placeId): Session
+    {
+        $session = Session::findOrFail($sessionId);
+
+        $session->update([
+            'voting_confirmed_venue'  => $placeId,
+            'session_confirmed_venue' => $placeId,
+            'session_confirmed_at'    => now(),
+            'status'                  => 'completed',
+        ]);
+
+        return $session->fresh('participants');
+    }
 }
