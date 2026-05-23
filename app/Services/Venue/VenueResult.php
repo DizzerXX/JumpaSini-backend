@@ -42,7 +42,7 @@ class VenueResult
         $self->isHalalVerified = false;
         $self->distanceMeters = (int) GeoHelper::haversineDistance($midLat, $midLng, $self->lat, $self->lng);
         $self->photoUrl       = self::buildPhotoUrl($place['photos'][0]['photo_reference'] ?? null);
-        $self->googleMapsUrl  = 'https://www.google.com/maps/place/?q=place_id:' . $self->placeId;
+        $self->googleMapsUrl  = 'https://www.google.com/maps/search/?api=1&query=' . $self->lat . ',' . $self->lng . '&query_place_id=' . $self->placeId;
         $self->source         = 'google';
 
         return $self;
@@ -64,8 +64,8 @@ class VenueResult
         $self->distanceMeters = (int) GeoHelper::haversineDistance($midLat, $midLng, $venue->latitude, $venue->longitude);
         $self->photoUrl       = self::buildPhotoUrl($venue->photo_reference);
         $self->googleMapsUrl  = $venue->google_place_id
-            ? 'https://www.google.com/maps/place/?q=place_id:' . $venue->google_place_id
-            : 'https://www.google.com/maps/search/?api=1&query=' . urlencode($venue->name);
+            ? 'https://www.google.com/maps/search/?api=1&query=' . $venue->latitude . ',' . $venue->longitude . '&query_place_id=' . $venue->google_place_id
+            : 'https://www.google.com/maps/search/?api=1&query=' . $venue->latitude . ',' . $venue->longitude;
         $self->source         = 'seeded';
 
         return $self;
