@@ -117,6 +117,32 @@ class MidpointTest extends TestCase
         ]);
     }
 
+    public function test_single_participant_returns_own_location_as_midpoint(): void
+    {
+        $session = Session::factory()->create(['transport_mode' => 'car']);
+
+        Participant::factory()->create([
+            'session_id' => $session->id,
+            'latitude'   => 3.1579,
+            'longitude'  => 101.7119,
+        ]);
+
+        $response = $this->postJson("/api/v1/sessions/{$session->short_code}/midpoint");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.is_fair', true)
+            ->assertJsonPath('data.iterations', 0);
+
+        $this->assertEqualsWithDelta(3.1579, (float) $response->json('data.lat'), 0.0001);
+        $this->assertEqualsWithDelta(101.7119, (float) $response->json('data.lng'), 0.0001);
+
+        $this->assertDatabaseHas('sessions', [
+            'id'           => $session->id,
+            'status'       => 'active',
+        ]);
+    }
+
     public function test_expired_session_cannot_calculate_midpoint(): void
     {
         $session = Session::factory()->expired()->create();

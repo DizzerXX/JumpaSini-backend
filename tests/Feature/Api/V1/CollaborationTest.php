@@ -5,7 +5,10 @@ namespace Tests\Feature\Api\V1;
 use App\Models\Participant;
 use App\Models\Session;
 use App\Models\VenueVote;
+use App\Services\Venue\BestPickService;
+use App\Services\Venue\VenueDiscoveryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
 class CollaborationTest extends TestCase
@@ -175,7 +178,54 @@ class CollaborationTest extends TestCase
         $this->assertStringContainsString($session->short_code, $shareableUrl);
     }
 
-    // ─── Test 7: Adding participant triggers auto-recalculation ──────────────
+    // ─── Test 7: Summary includes recommendation when midpoint is set ────────
+
+    public function test_summary_includes_recommendation_when_midpoint_exists(): void
+    {
+        $session = $this->sessionWithMidpoint();
+        Participant::factory()->count(2)->create(['session_id' => $session->id]);
+
+        $fakeVenue = [
+            'place_id'             => 'ChIJsummarytest001',
+            'name'                 => 'Midpoint Cafe',
+            'address'              => '1 Jalan Test, Kuala Lumpur',
+            'lat'                  => 3.1579,
+            'lng'                  => 101.7119,
+            'type'                 => 'restaurant',
+            'rating'               => 4.5,
+            'is_halal'             => true,
+            'is_halal_verified'    => false,
+            'distance_meters'      => 300,
+            'photo_url'            => null,
+            'google_maps_url'      => 'https://www.google.com/maps/search/?api=1&query=3.1579,101.7119',
+            'source'               => 'seeded',
+            'travel_times'         => [],
+            'best_for_participant' => null,
+            'is_best_pick'         => true,
+            'score'                => 0.9,
+        ];
+
+        $this->mock(VenueDiscoveryService::class, function (MockInterface $mock) use ($fakeVenue) {
+            $mock->shouldReceive('discover')->once()->andReturn(['venues' => [$fakeVenue], 'weather' => null]);
+        });
+
+        $this->mock(BestPickService::class, function (MockInterface $mock) use ($fakeVenue) {
+            $mock->shouldReceive('selectBestPick')->once()->andReturn([$fakeVenue]);
+            $mock->shouldReceive('calculateFairness')->once()->andReturn(1.0);
+        });
+
+        $response = $this->getJson("/api/v1/sessions/{$session->short_code}/summary");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $recommendation = $response->json('data.recommendation');
+        $this->assertNotNull($recommendation);
+        $this->assertArrayHasKey('best_venue', $recommendation);
+        $this->assertSame('Midpoint Cafe', $recommendation['best_venue']['name']);
+    }
+
+    // ─── Test 8: Adding participant triggers auto-recalculation ──────────────
 
     public function test_adding_participant_to_session_triggers_recalculation(): void
     {
