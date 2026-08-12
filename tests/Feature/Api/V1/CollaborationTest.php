@@ -153,6 +153,79 @@ class CollaborationTest extends TestCase
         $this->assertSame(2, $summary['total']);
     }
 
+    // ─── my_vote ──────────────────────────────────────────────────────────────
+
+    public function test_vote_summary_reports_my_vote_for_an_identified_caller(): void
+    {
+        $session = Session::factory()->create();
+        $me      = $this->participantFor($session, 'Danish');
+        $other   = $this->participantFor($session, 'Ahmad');
+
+        $this->castVote($session, 'up', $me)->assertStatus(200);
+        $this->castVote($session, 'down', $other)->assertStatus(200);
+
+        $summary = $this->getJson(
+            "/api/v1/sessions/{$session->short_code}/votes",
+            [
+                'X-Participant-Id'    => $me->id,
+                'X-Participant-Token' => $me->access_token,
+            ]
+        )->assertStatus(200)->json('data.vote_summary.ChIJtest');
+
+        $this->assertSame('up', $summary['my_vote']);
+        $this->assertSame(1, $summary['up']);
+        $this->assertSame(1, $summary['down']);
+    }
+
+    public function test_vote_summary_omits_my_vote_for_anonymous_callers(): void
+    {
+        $session = Session::factory()->create();
+        $this->castVote($session, 'up', $this->participantFor($session))->assertStatus(200);
+
+        $summary = $this->getJson("/api/v1/sessions/{$session->short_code}/votes")
+            ->assertStatus(200)
+            ->json('data.vote_summary.ChIJtest');
+
+        $this->assertNull($summary['my_vote']);
+        $this->assertSame(1, $summary['up']);
+    }
+
+    public function test_vote_summary_ignores_a_forged_participant_token(): void
+    {
+        $session = Session::factory()->create();
+        $me      = $this->participantFor($session);
+
+        $this->castVote($session, 'up', $me)->assertStatus(200);
+
+        $summary = $this->getJson(
+            "/api/v1/sessions/{$session->short_code}/votes",
+            [
+                'X-Participant-Id'    => $me->id,
+                'X-Participant-Token' => 'forged',
+            ]
+        )->assertStatus(200)->json('data.vote_summary.ChIJtest');
+
+        $this->assertNull($summary['my_vote'], 'A bad token must not reveal another vote.');
+    }
+
+    public function test_session_summary_includes_my_vote(): void
+    {
+        $session = Session::factory()->create();
+        $me      = $this->participantFor($session);
+
+        $this->castVote($session, 'down', $me)->assertStatus(200);
+
+        $summary = $this->getJson(
+            "/api/v1/sessions/{$session->short_code}/summary",
+            [
+                'X-Participant-Id'    => $me->id,
+                'X-Participant-Token' => $me->access_token,
+            ]
+        )->assertStatus(200)->json('data.vote_summary.ChIJtest');
+
+        $this->assertSame('down', $summary['my_vote']);
+    }
+
     // ─── Test 3: Vote summary counts correctly ────────────────────────────────
 
     public function test_vote_summary_counts_correctly(): void

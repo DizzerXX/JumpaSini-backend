@@ -18,5 +18,11 @@ interface VenueVoteRepositoryInterface
 
     public function getVotesForSession(string $sessionId): Collection;
 
-    public function getVoteSummary(string $sessionId): array;
+    /**
+     * Vote tallies keyed by google_place_id.
+     *
+     * When $participantId is given, each entry also carries `my_vote` — that
+     * participant's own vote ('up'/'down'), or null if it has not voted on it.
+     */
+    public function getVoteSummary(string $sessionId, ?string $participantId = null): array;
 }

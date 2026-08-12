@@ -19,11 +19,15 @@ class SummaryService
         private readonly RecommendationService        $recommendationService,
     ) {}
 
-    public function buildSummary(Session $session): array
+    /**
+     * @param  string|null  $participantId  When given, vote_summary carries the
+     *                                      caller's own vote per venue (`my_vote`).
+     */
+    public function buildSummary(Session $session, ?string $participantId = null): array
     {
         $session->loadMissing('participants');
 
-        $voteSummary     = $this->voteRepository->getVoteSummary($session->id);
+        $voteSummary     = $this->voteRepository->getVoteSummary($session->id, $participantId);
         $confirmedVenue  = $this->resolveConfirmedVenue($session);
         $recommendation  = $this->resolveRecommendation($session);
 

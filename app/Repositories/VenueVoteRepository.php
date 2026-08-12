@@ -46,7 +46,7 @@ class VenueVoteRepository implements VenueVoteRepositoryInterface
         return VenueVote::forSession($sessionId)->get();
     }
 
-    public function getVoteSummary(string $sessionId): array
+    public function getVoteSummary(string $sessionId, ?string $participantId = null): array
     {
         $votes = $this->getVotesForSession($sessionId);
 
@@ -54,10 +54,16 @@ class VenueVoteRepository implements VenueVoteRepositoryInterface
         foreach ($votes as $vote) {
             $placeId = $vote->google_place_id;
             if (!isset($summary[$placeId])) {
-                $summary[$placeId] = ['up' => 0, 'down' => 0, 'total' => 0];
+                // my_vote is always present so clients can rely on the key existing;
+                // null means "this participant has not voted on this venue".
+                $summary[$placeId] = ['up' => 0, 'down' => 0, 'total' => 0, 'my_vote' => null];
             }
             $summary[$placeId][$vote->vote]++;
             $summary[$placeId]['total']++;
+
+            if ($participantId !== null && $vote->participant_id === $participantId) {
+                $summary[$placeId]['my_vote'] = $vote->vote;
+            }
         }
 
         return $summary;

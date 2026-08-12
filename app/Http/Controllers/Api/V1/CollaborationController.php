@@ -13,6 +13,7 @@ use App\Services\Session\ParticipantAuthenticator;
 use App\Services\Session\SummaryService;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class CollaborationController extends Controller
 {
@@ -56,7 +57,7 @@ class CollaborationController extends Controller
             vote:            $request->vote,
         );
 
-        $voteSummary = $this->voteRepository->getVoteSummary($session->id);
+        $voteSummary = $this->voteRepository->getVoteSummary($session->id, $participant->id);
 
         return $this->successResponse([
             'vote_summary' => $voteSummary,
@@ -64,7 +65,7 @@ class CollaborationController extends Controller
         ], 'Vote cast successfully.');
     }
 
-    public function getVotes(string $shortCode): JsonResponse
+    public function getVotes(Request $request, string $shortCode): JsonResponse
     {
         $session = $this->sessionRepository->findByShortCode($shortCode);
 
@@ -72,7 +73,10 @@ class CollaborationController extends Controller
             return $this->errorResponse('Session not found or has expired.', null, 404);
         }
 
-        $voteSummary = $this->voteRepository->getVoteSummary($session->id);
+        // Anonymous callers still get tallies; identified ones also get my_vote.
+        $participant = $this->participantAuthenticator->fromRequest($session, $request);
+
+        $voteSummary = $this->voteRepository->getVoteSummary($session->id, $participant?->id);
 
         return $this->successResponse([
             'vote_summary' => $voteSummary,
@@ -95,7 +99,7 @@ class CollaborationController extends Controller
         );
     }
 
-    public function startVoting(string $shortCode): JsonResponse
+    public function startVoting(Request $request, string $shortCode): JsonResponse
     {
         $session = $this->sessionRepository->findByShortCode($shortCode);
 
@@ -121,12 +125,13 @@ class CollaborationController extends Controller
         AutoConfirmVenueJob::dispatch($session->id)
             ->delay(now()->addMinutes($durationMinutes));
 
-        $summary = $this->summaryService->buildSummary($session);
+        $participant = $this->participantAuthenticator->fromRequest($session, $request);
+        $summary     = $this->summaryService->buildSummary($session, $participant?->id);
 
         return $this->successResponse($summary, 'Voting started successfully.');
     }
 
-    public function summary(string $shortCode): JsonResponse
+    public function summary(Request $request, string $shortCode): JsonResponse
     {
         $session = $this->sessionRepository->findByShortCode($shortCode);
 
@@ -134,7 +139,8 @@ class CollaborationController extends Controller
             return $this->errorResponse('Session not found or has expired.', null, 404);
         }
 
-        $summary = $this->summaryService->buildSummary($session);
+        $participant = $this->participantAuthenticator->fromRequest($session, $request);
+        $summary     = $this->summaryService->buildSummary($session, $participant?->id);
 
         return $this->successResponse($summary, 'Session summary retrieved successfully.');
     }
