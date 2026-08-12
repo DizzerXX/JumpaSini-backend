@@ -31,6 +31,11 @@ services:
 
       - key: DB_CONNECTION
         value: pgsql
+      # Render Postgres requires SSL. 'prefer' (the Laravel default) silently falls
+      # back to an unencrypted connection the server then closes, which surfaces as
+      # SQLSTATE[08006] rather than a clear TLS error.
+      - key: DB_SSLMODE
+        value: require
       - key: CACHE_STORE
         value: database
       - key: QUEUE_CONNECTION

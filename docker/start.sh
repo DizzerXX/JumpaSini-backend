@@ -10,7 +10,34 @@ set -e
 php artisan config:cache
 php artisan route:cache
 
-php artisan migrate --force
+# Retry before giving up: a managed Postgres instance that is cold, waking, or
+# briefly unreachable would otherwise fail the whole deploy on a transient error.
+# A genuinely misconfigured or suspended database still fails, loudly, after this.
+migrate_with_retry() {
+  attempt=1
+  max_attempts=5
+  delay=5
+
+  while [ "$attempt" -le "$max_attempts" ]; do
+    if php artisan migrate --force; then
+      return 0
+    fi
+
+    if [ "$attempt" -eq "$max_attempts" ]; then
+      echo "ERROR: migrations failed after ${max_attempts} attempts."
+      echo "       Check the database is running and reachable, and that DB_HOST"
+      echo "       uses the INTERNAL hostname and DB_SSLMODE is set correctly."
+      return 1
+    fi
+
+    echo "WARN: migration attempt ${attempt}/${max_attempts} failed; retrying in ${delay}s..."
+    sleep "$delay"
+    attempt=$((attempt + 1))
+    delay=$((delay * 2))
+  done
+}
+
+migrate_with_retry
 
 # Seeds are idempotent (firstOrCreate). Non-fatal: a seeding problem should not stop
 # the service from coming up, unlike a migration problem.

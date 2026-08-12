@@ -94,7 +94,11 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'search_path' => 'public',
-            'sslmode' => 'prefer',
+            // Configurable: managed Postgres (Render, Supabase, RDS) generally requires
+            // SSL, and 'prefer' silently falls back to an unencrypted connection that
+            // the server then closes — which surfaces as SQLSTATE[08006] rather than a
+            // clear TLS error. Set DB_SSLMODE=require against those providers.
+            'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 
         'sqlsrv' => [
