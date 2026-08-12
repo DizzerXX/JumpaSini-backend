@@ -18,6 +18,11 @@ class Participant extends Model
         'address',
         'latitude',
         'longitude',
+        'access_token',
+    ];
+
+    protected $hidden = [
+        'access_token',
     ];
 
     protected $casts = [

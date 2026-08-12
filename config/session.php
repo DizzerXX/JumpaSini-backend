@@ -18,7 +18,10 @@ return [
     |
     */
 
-    'driver' => env('SESSION_DRIVER', 'database'),
+    // Defaults to 'array', NOT 'database': this app owns a `sessions` table of its own
+    // (meetup sessions), which has none of the columns Laravel's database session
+    // handler writes. This is a token-authenticated API and needs no server sessions.
+    'driver' => env('SESSION_DRIVER', 'array'),
 
     /*
     |--------------------------------------------------------------------------
@@ -86,7 +89,8 @@ return [
     |
     */
 
-    'table' => env('SESSION_TABLE', 'sessions'),
+    // Deliberately NOT 'sessions' — that table belongs to the app's meetup sessions.
+    'table' => env('SESSION_TABLE', 'laravel_sessions'),
 
     /*
     |--------------------------------------------------------------------------

@@ -5,15 +5,18 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\AddParticipantRequest;
 use App\Http\Requests\Api\V1\CreateSessionRequest;
+use App\Http\Requests\Api\V1\RemoveParticipantRequest;
 use App\Http\Resources\ParticipantResource;
 use App\Http\Resources\SessionResource;
 use App\Repositories\Contracts\ParticipantRepositoryInterface;
 use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Services\Midpoint\MidpointCalculatorService;
+use App\Services\Session\ParticipantAuthenticator;
 use App\Services\ShortCodeService;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class SessionController extends Controller
 {
@@ -24,6 +27,7 @@ class SessionController extends Controller
         private readonly ParticipantRepositoryInterface $participantRepository,
         private readonly ShortCodeService               $shortCodeService,
         private readonly MidpointCalculatorService      $midpointCalculator,
+        private readonly ParticipantAuthenticator       $participantAuthenticator,
     ) {}
 
     public function store(CreateSessionRequest $request): JsonResponse
@@ -75,12 +79,15 @@ class SessionController extends Controller
             );
         }
 
+        $accessToken = Str::random(40);
+
         $participant = $this->participantRepository->create([
-            'session_id' => $session->id,
-            'name'       => $request->name,
-            'address'    => $request->address,
-            'latitude'   => $request->latitude,
-            'longitude'  => $request->longitude,
+            'session_id'   => $session->id,
+            'name'         => $request->name,
+            'address'      => $request->address,
+            'latitude'     => $request->latitude,
+            'longitude'    => $request->longitude,
+            'access_token' => $accessToken,
         ]);
 
         $session->refresh()->load('participants');
@@ -105,8 +112,11 @@ class SessionController extends Controller
 
         return $this->successResponse(
             [
-                'participant' => new ParticipantResource($participant),
-                'session'     => new SessionResource($session),
+                'participant'  => new ParticipantResource($participant),
+                'session'      => new SessionResource($session),
+                // Returned once, here only — the client must store this to prove
+                // ownership later (e.g. to remove itself from the session).
+                'access_token' => $accessToken,
             ],
             'Participant added successfully.',
             201
@@ -148,7 +158,7 @@ class SessionController extends Controller
         );
     }
 
-    public function removeParticipant(string $shortCode, string $participantId): JsonResponse
+    public function removeParticipant(RemoveParticipantRequest $request, string $shortCode, string $participantId): JsonResponse
     {
         $session = $this->sessionRepository->findByShortCode($shortCode);
 
@@ -156,10 +166,18 @@ class SessionController extends Controller
             return $this->errorResponse('Session not found or has expired.', null, 404);
         }
 
-        $participant = $session->participants->find($participantId);
-
-        if (!$participant) {
+        if ($session->participants->find($participantId) === null) {
             return $this->errorResponse('Participant not found in this session.', null, 404);
+        }
+
+        $participant = $this->participantAuthenticator->authenticate(
+            $session,
+            $participantId,
+            $request->access_token,
+        );
+
+        if ($participant === null) {
+            return $this->errorResponse('You are not authorized to remove this participant.', null, 403);
         }
 
         $participant->delete();

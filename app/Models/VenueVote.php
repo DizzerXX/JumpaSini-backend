@@ -13,6 +13,7 @@ class VenueVote extends Model
 
     protected $fillable = [
         'session_id',
+        'participant_id',
         'google_place_id',
         'venue_name',
         'participant_name',
@@ -22,6 +23,11 @@ class VenueVote extends Model
     public function session(): BelongsTo
     {
         return $this->belongsTo(Session::class, 'session_id');
+    }
+
+    public function participant(): BelongsTo
+    {
+        return $this->belongsTo(Participant::class, 'participant_id');
     }
 
     public function scopeForSession(Builder $query, string $sessionId): void

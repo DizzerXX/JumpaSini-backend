@@ -195,10 +195,14 @@ class SessionTest extends TestCase
     public function test_can_remove_participant_from_session(): void
     {
         $session     = Session::factory()->create();
-        $participant = Participant::factory()->create(['session_id' => $session->id]);
+        $participant = Participant::factory()->create([
+            'session_id'   => $session->id,
+            'access_token' => 'valid-token',
+        ]);
 
         $response = $this->deleteJson(
-            "/api/v1/sessions/{$session->short_code}/participants/{$participant->id}"
+            "/api/v1/sessions/{$session->short_code}/participants/{$participant->id}",
+            ['access_token' => 'valid-token']
         );
 
         $response->assertStatus(200)
@@ -208,14 +212,50 @@ class SessionTest extends TestCase
         $this->assertDatabaseMissing('participants', ['id' => $participant->id]);
     }
 
+    public function test_remove_participant_rejects_wrong_access_token(): void
+    {
+        $session     = Session::factory()->create();
+        $participant = Participant::factory()->create([
+            'session_id'   => $session->id,
+            'access_token' => 'valid-token',
+        ]);
+
+        $response = $this->deleteJson(
+            "/api/v1/sessions/{$session->short_code}/participants/{$participant->id}",
+            ['access_token' => 'wrong-token']
+        );
+
+        $response->assertStatus(403)
+            ->assertJsonPath('success', false);
+
+        $this->assertDatabaseHas('participants', ['id' => $participant->id]);
+    }
+
+    public function test_remove_participant_requires_access_token(): void
+    {
+        $session     = Session::factory()->create();
+        $participant = Participant::factory()->create(['session_id' => $session->id]);
+
+        $response = $this->deleteJson(
+            "/api/v1/sessions/{$session->short_code}/participants/{$participant->id}"
+        );
+
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false);
+    }
+
     public function test_remove_participant_returns_404_for_wrong_session(): void
     {
         $session1    = Session::factory()->create();
         $session2    = Session::factory()->create();
-        $participant = Participant::factory()->create(['session_id' => $session2->id]);
+        $participant = Participant::factory()->create([
+            'session_id'   => $session2->id,
+            'access_token' => 'valid-token',
+        ]);
 
         $response = $this->deleteJson(
-            "/api/v1/sessions/{$session1->short_code}/participants/{$participant->id}"
+            "/api/v1/sessions/{$session1->short_code}/participants/{$participant->id}",
+            ['access_token' => 'valid-token']
         );
 
         $response->assertStatus(404)

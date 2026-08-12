@@ -63,4 +63,56 @@ class CachedGoogleMapsClient
             return $this->client->textSearch($lat, $lng, $query, $radius);
         });
     }
+
+    /**
+     * Autocomplete predictions, cached on the normalised input.
+     *
+     * Short TTL relative to places_ttl: these are typed keystrokes, so the win is
+     * collapsing repeats across users rather than long-term reuse.
+     *
+     * A session token is deliberately excluded from the cache key — it exists to group
+     * a user's keystrokes for Google's billing and must not fragment the shared cache.
+     *
+     * @throws \App\Exceptions\GoogleMapsException
+     */
+    public function placeAutocomplete(string $input, ?string $sessionToken = null): array
+    {
+        $normalised = mb_strtolower(trim($input));
+        $cacheKey   = 'gmaps:autocomplete:' . md5($normalised);
+        $ttl        = (int) config('jumpa.cache.autocomplete_ttl');
+
+        return Cache::remember($cacheKey, $ttl, function () use ($input, $sessionToken) {
+            return $this->client->placeAutocomplete($input, $sessionToken);
+        });
+    }
+
+    /**
+     * Place details cached for places_ttl seconds — a place's coordinates are stable.
+     *
+     * @throws \App\Exceptions\GoogleMapsException
+     */
+    public function placeDetails(string $placeId, ?string $sessionToken = null): array
+    {
+        $cacheKey = 'gmaps:placeDetails:' . md5($placeId);
+        $ttl      = (int) config('jumpa.cache.places_ttl');
+
+        return Cache::remember($cacheKey, $ttl, function () use ($placeId, $sessionToken) {
+            return $this->client->placeDetails($placeId, $sessionToken);
+        });
+    }
+
+    /**
+     * Reverse geocode cached for places_ttl seconds, keyed on ~11m-precision coords.
+     *
+     * @throws \App\Exceptions\GoogleMapsException
+     */
+    public function reverseGeocode(float $lat, float $lng): string
+    {
+        $cacheKey = sprintf('gmaps:reverseGeocode:%.4f,%.4f', $lat, $lng);
+        $ttl      = (int) config('jumpa.cache.places_ttl');
+
+        return Cache::remember($cacheKey, $ttl, function () use ($lat, $lng) {
+            return $this->client->reverseGeocode($lat, $lng);
+        });
+    }
 }

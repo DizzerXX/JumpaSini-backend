@@ -10,23 +10,30 @@ class VenueVoteRepository implements VenueVoteRepositoryInterface
 {
     public function upsertVote(
         string $sessionId,
+        string $participantId,
         string $placeId,
         string $venueName,
         ?string $participantName,
         string $vote
     ): VenueVote {
+        // Keyed on participant_id, never participant_name — two participants who both
+        // skipped entering a name must still cast two distinct votes.
         $existing = VenueVote::where('session_id', $sessionId)
             ->where('google_place_id', $placeId)
-            ->where('participant_name', $participantName)
+            ->where('participant_id', $participantId)
             ->first();
 
         if ($existing) {
-            $existing->update(['vote' => $vote]);
+            $existing->update([
+                'vote'             => $vote,
+                'participant_name' => $participantName,
+            ]);
             return $existing->fresh();
         }
 
         return VenueVote::create([
             'session_id'       => $sessionId,
+            'participant_id'   => $participantId,
             'google_place_id'  => $placeId,
             'venue_name'       => $venueName,
             'participant_name' => $participantName,

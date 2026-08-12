@@ -170,39 +170,49 @@ class VenueDiscoveryService
             $participants
         );
 
-        foreach ($venues as $venue) {
-            try {
-                $rows = $this->mapsClient->distanceMatrix(
-                    origins:      $origins,
-                    destinations: [['lat' => $venue->lat, 'lng' => $venue->lng]],
-                    mode:         $transportMode,
-                );
+        // One request covering every venue. Distance Matrix accepts multiple
+        // destinations, so the previous per-venue loop cost 5x the requests and 5x the
+        // latency for the same number of billed elements.
+        $destinations = array_map(
+            static fn(VenueResult $v) => ['lat' => $v->lat, 'lng' => $v->lng],
+            array_values($venues)
+        );
 
-                $travelTimes       = [];
-                $minSeconds        = PHP_INT_MAX;
-                $bestParticipantId = null;
+        try {
+            $rows = $this->mapsClient->distanceMatrix(
+                origins:      $origins,
+                destinations: $destinations,
+                mode:         $transportMode,
+            );
+        } catch (\Throwable) {
+            // Leave travelTimes empty if the API call fails
+            return;
+        }
 
-                foreach ($participants as $i => $participant) {
-                    $element = $rows[$i]['elements'][0] ?? null;
+        foreach (array_values($venues) as $venueIndex => $venue) {
+            $travelTimes       = [];
+            $minSeconds        = PHP_INT_MAX;
+            $bestParticipantId = null;
 
-                    if ($element && ($element['status'] ?? '') === 'OK') {
-                        $seconds = (int) ($element['duration']['value'] ?? 0);
-                        $text    = (string) ($element['duration']['text'] ?? '');
+            foreach (array_values($participants) as $originIndex => $participant) {
+                // rows are per-origin; elements within a row are per-destination
+                $element = $rows[$originIndex]['elements'][$venueIndex] ?? null;
 
-                        $travelTimes[$participant->id] = ['seconds' => $seconds, 'text' => $text];
+                if ($element && ($element['status'] ?? '') === 'OK') {
+                    $seconds = (int) ($element['duration']['value'] ?? 0);
+                    $text    = (string) ($element['duration']['text'] ?? '');
 
-                        if ($seconds < $minSeconds) {
-                            $minSeconds        = $seconds;
-                            $bestParticipantId = $participant->id;
-                        }
+                    $travelTimes[$participant->id] = ['seconds' => $seconds, 'text' => $text];
+
+                    if ($seconds < $minSeconds) {
+                        $minSeconds        = $seconds;
+                        $bestParticipantId = $participant->id;
                     }
                 }
-
-                $venue->travelTimes        = $travelTimes;
-                $venue->bestForParticipant = $bestParticipantId;
-            } catch (\Throwable) {
-                // Leave travelTimes empty if API call fails
             }
+
+            $venue->travelTimes        = $travelTimes;
+            $venue->bestForParticipant = $bestParticipantId;
         }
     }
 }

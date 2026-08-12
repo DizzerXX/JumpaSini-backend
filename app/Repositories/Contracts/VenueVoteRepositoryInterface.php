@@ -9,6 +9,7 @@ interface VenueVoteRepositoryInterface
 {
     public function upsertVote(
         string $sessionId,
+        string $participantId,
         string $placeId,
         string $venueName,
         ?string $participantName,

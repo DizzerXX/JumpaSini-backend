@@ -10,6 +10,8 @@ use App\Services\Venue\BestPickService;
 use App\Services\Venue\VenueDiscoveryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Mockery\MockInterface;
 use Tests\TestCase;
 
@@ -28,13 +30,30 @@ class CollaborationTest extends TestCase
         ]);
     }
 
-    private function castVote(Session $session, string $vote = 'up', string $participantName = 'Danish', string $placeId = 'ChIJtest'): void
+    /** Create a participant in the session with a known access token. */
+    private function participantFor(Session $session, ?string $name = 'Danish'): Participant
     {
-        $this->postJson("/api/v1/sessions/{$session->short_code}/votes", [
-            'google_place_id'  => $placeId,
-            'venue_name'       => 'Test Mall',
-            'participant_name' => $participantName,
-            'vote'             => $vote,
+        return Participant::factory()->create([
+            'session_id'   => $session->id,
+            'name'         => $name,
+            'access_token' => 'token-' . Str::random(8),
+        ]);
+    }
+
+    private function castVote(
+        Session $session,
+        string $vote = 'up',
+        ?Participant $participant = null,
+        string $placeId = 'ChIJtest'
+    ): TestResponse {
+        $participant ??= $this->participantFor($session);
+
+        return $this->postJson("/api/v1/sessions/{$session->short_code}/votes", [
+            'google_place_id' => $placeId,
+            'venue_name'      => 'Test Mall',
+            'participant_id'  => $participant->id,
+            'access_token'    => $participant->access_token,
+            'vote'            => $vote,
         ]);
     }
 
@@ -42,55 +61,96 @@ class CollaborationTest extends TestCase
 
     public function test_cast_vote_stores_correctly(): void
     {
-        $session = $this->sessionWithMidpoint();
-        Participant::factory()->count(2)->create(['session_id' => $session->id]);
+        $session     = $this->sessionWithMidpoint();
+        $participant = $this->participantFor($session, 'Danish');
 
-        $response = $this->postJson("/api/v1/sessions/{$session->short_code}/votes", [
-            'google_place_id'  => 'ChIJtest',
-            'venue_name'       => 'Test Mall',
-            'participant_name' => 'Danish',
-            'vote'             => 'up',
-        ]);
+        $response = $this->castVote($session, 'up', $participant);
 
         $response->assertStatus(200)
             ->assertJsonPath('success', true)
             ->assertJsonStructure(['data' => ['vote_summary', 'your_vote']]);
 
         $this->assertDatabaseHas('venue_votes', [
-            'session_id'       => $session->id,
-            'google_place_id'  => 'ChIJtest',
-            'participant_name' => 'Danish',
-            'vote'             => 'up',
+            'session_id'      => $session->id,
+            'participant_id'  => $participant->id,
+            'google_place_id' => 'ChIJtest',
+            'vote'            => 'up',
         ]);
+    }
+
+    public function test_cast_vote_requires_a_valid_access_token(): void
+    {
+        $session     = Session::factory()->create();
+        $participant = $this->participantFor($session);
+
+        $response = $this->postJson("/api/v1/sessions/{$session->short_code}/votes", [
+            'google_place_id' => 'ChIJtest',
+            'venue_name'      => 'Test Mall',
+            'participant_id'  => $participant->id,
+            'access_token'    => 'wrong-token',
+            'vote'            => 'up',
+        ]);
+
+        $response->assertStatus(403)->assertJsonPath('success', false);
+        $this->assertDatabaseCount('venue_votes', 0);
+    }
+
+    public function test_cast_vote_rejects_participant_from_another_session(): void
+    {
+        $session = Session::factory()->create();
+        $outsider = $this->participantFor(Session::factory()->create());
+
+        $response = $this->postJson("/api/v1/sessions/{$session->short_code}/votes", [
+            'google_place_id' => 'ChIJtest',
+            'venue_name'      => 'Test Mall',
+            'participant_id'  => $outsider->id,
+            'access_token'    => $outsider->access_token,
+            'vote'            => 'up',
+        ]);
+
+        $response->assertStatus(403)->assertJsonPath('success', false);
+        $this->assertDatabaseCount('venue_votes', 0);
     }
 
     // ─── Test 2: Upsert replaces an existing vote ────────────────────────────
 
     public function test_upsert_vote_updates_existing_vote(): void
     {
-        $session = Session::factory()->create();
+        $session     = Session::factory()->create();
+        $participant = $this->participantFor($session);
 
-        $this->postJson("/api/v1/sessions/{$session->short_code}/votes", [
-            'google_place_id'  => 'ChIJtest',
-            'venue_name'       => 'Test Mall',
-            'participant_name' => 'Danish',
-            'vote'             => 'up',
-        ])->assertStatus(200);
-
-        $this->postJson("/api/v1/sessions/{$session->short_code}/votes", [
-            'google_place_id'  => 'ChIJtest',
-            'venue_name'       => 'Test Mall',
-            'participant_name' => 'Danish',
-            'vote'             => 'down',
-        ])->assertStatus(200);
+        $this->castVote($session, 'up', $participant)->assertStatus(200);
+        $this->castVote($session, 'down', $participant)->assertStatus(200);
 
         $this->assertDatabaseCount('venue_votes', 1);
         $this->assertDatabaseHas('venue_votes', [
-            'session_id'       => $session->id,
-            'google_place_id'  => 'ChIJtest',
-            'participant_name' => 'Danish',
-            'vote'             => 'down',
+            'session_id'     => $session->id,
+            'participant_id' => $participant->id,
+            'vote'           => 'down',
         ]);
+    }
+
+    /**
+     * Regression: votes used to be keyed on participant_name, so two participants
+     * who both left their name blank collapsed into a single row.
+     */
+    public function test_two_unnamed_participants_cast_separate_votes(): void
+    {
+        $session = Session::factory()->create();
+        $first   = $this->participantFor($session, null);
+        $second  = $this->participantFor($session, null);
+
+        $this->castVote($session, 'up', $first)->assertStatus(200);
+        $this->castVote($session, 'down', $second)->assertStatus(200);
+
+        $this->assertDatabaseCount('venue_votes', 2);
+
+        $summary = $this->getJson("/api/v1/sessions/{$session->short_code}/votes")
+            ->json('data.vote_summary.ChIJtest');
+
+        $this->assertSame(1, $summary['up']);
+        $this->assertSame(1, $summary['down']);
+        $this->assertSame(2, $summary['total']);
     }
 
     // ─── Test 3: Vote summary counts correctly ────────────────────────────────
@@ -99,9 +159,9 @@ class CollaborationTest extends TestCase
     {
         $session = Session::factory()->create();
 
-        $this->castVote($session, 'up', 'Danish');
-        $this->castVote($session, 'up', 'Ahmad');
-        $this->castVote($session, 'down', 'Siti');
+        $this->castVote($session, 'up', $this->participantFor($session, 'Danish'));
+        $this->castVote($session, 'up', $this->participantFor($session, 'Ahmad'));
+        $this->castVote($session, 'down', $this->participantFor($session, 'Siti'));
 
         $response = $this->getJson("/api/v1/sessions/{$session->short_code}/votes");
 
@@ -269,8 +329,8 @@ class CollaborationTest extends TestCase
         $this->postJson("/api/v1/sessions/{$session->short_code}/voting/start")
             ->assertStatus(200);
 
-        $this->castVote($session, 'up', 'Danish', 'ChIJwinner');
-        $this->castVote($session, 'down', 'Ahmad', 'ChIJloser');
+        $this->castVote($session, 'up', $this->participantFor($session, 'Danish'), 'ChIJwinner');
+        $this->castVote($session, 'down', $this->participantFor($session, 'Ahmad'), 'ChIJloser');
 
         $response = $this->getJson("/api/v1/sessions/{$session->short_code}/summary");
 
@@ -295,12 +355,12 @@ class CollaborationTest extends TestCase
         ]);
 
         // Venue A: 3 up votes (winner)
-        $this->castVote($session, 'up', 'Danish', 'ChIJvenueA');
-        $this->castVote($session, 'up', 'Ahmad', 'ChIJvenueA');
-        $this->castVote($session, 'up', 'Siti', 'ChIJvenueA');
+        $this->castVote($session, 'up', $this->participantFor($session, 'Danish'), 'ChIJvenueA');
+        $this->castVote($session, 'up', $this->participantFor($session, 'Ahmad'), 'ChIJvenueA');
+        $this->castVote($session, 'up', $this->participantFor($session, 'Siti'), 'ChIJvenueA');
 
         // Venue B: 1 up vote
-        $this->castVote($session, 'up', 'Zara', 'ChIJvenueB');
+        $this->castVote($session, 'up', $this->participantFor($session, 'Zara'), 'ChIJvenueB');
 
         AutoConfirmVenueJob::dispatchSync($session->id);
 

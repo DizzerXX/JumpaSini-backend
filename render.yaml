@@ -3,5 +3,64 @@ services:
     name: jumpa-sini-backend
     env: php
     buildCommand: composer install --no-dev --optimize-autoloader
-    startCommand: php artisan serve --host=0.0.0.0 --port=$PORT
+
+    # Migrations run on every boot, before the server starts. `migrate --force` is
+    # idempotent, and `&&` means a failed migration aborts startup rather than
+    # serving traffic against a half-applied schema.
+    #
+    # NOTE: if this service is deployed from the Dockerfile instead, this
+    # startCommand is ignored — docker/start.sh performs the same steps.
+    startCommand: >-
+      php artisan migrate --force &&
+      php artisan db:seed --class=VenueSeeder --force &&
+      php artisan db:seed --class=AdminSeeder --force &&
+      php artisan serve --host=0.0.0.0 --port=$PORT
+
     healthCheckPath: /api/v1/health
+
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+
+      # Token-auth API: no server-side sessions. Must NOT be "database" — the
+      # `sessions` table holds meetup sessions, not Laravel's session store.
+      - key: SESSION_DRIVER
+        value: array
+
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: sync
+
+      # Browser origins allowed to call this API. Without this the dashboard is
+      # blocked by CORS, since allowed_origins is no longer "*".
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://jumpasini-dashboard.onrender.com
+      - key: FRONTEND_URL
+        value: https://jumpasini-dashboard.onrender.com
+
+      # Secrets — set these in the Render dashboard, not in this file.
+      - key: APP_KEY
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_DATABASE
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: OPENWEATHERMAP_API_KEY
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

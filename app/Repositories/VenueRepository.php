@@ -17,8 +17,15 @@ class VenueRepository implements VenueRepositoryInterface
                     sin(radians(?)) * sin(radians(latitude))
                 )';
 
+        // Bounding-box prefilter: the haversine expression can't use an index, so
+        // without this every active venue of the type is scanned and scored. The box
+        // is a cheap superset of the circle — the exact radius filter still runs below.
+        [$latMin, $latMax, $lngMin, $lngMax] = $this->boundingBox($lat, $lng, $radiusMeters);
+
         $inner = Venue::active()
             ->byType($type)
+            ->whereBetween('latitude', [$latMin, $latMax])
+            ->whereBetween('longitude', [$lngMin, $lngMax])
             ->selectRaw("*, ($haversine) AS distance_meters", [$lat, $lng, $lat])
             ->toBase();
 
@@ -29,6 +36,27 @@ class VenueRepository implements VenueRepositoryInterface
             ->get();
 
         return Venue::hydrate($rows->map(fn ($r) => (array) $r)->all());
+    }
+
+    /**
+     * Latitude/longitude window enclosing a radius around a point.
+     *
+     * @return array{0: float, 1: float, 2: float, 3: float} [latMin, latMax, lngMin, lngMax]
+     */
+    private function boundingBox(float $lat, float $lng, int $radiusMeters): array
+    {
+        $latDelta = $radiusMeters / 111_320.0;
+
+        // Longitude degrees shrink toward the poles; guard against cos() hitting 0.
+        $cosLat   = max(cos(deg2rad($lat)), 0.000001);
+        $lngDelta = $radiusMeters / (111_320.0 * $cosLat);
+
+        return [
+            $lat - $latDelta,
+            $lat + $latDelta,
+            $lng - $lngDelta,
+            $lng + $lngDelta,
+        ];
     }
 
     public function findByType(string $type): Collection

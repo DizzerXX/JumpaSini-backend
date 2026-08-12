@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Models\Participant;
 use App\Models\Session;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
 
 class ParticipantFactory extends Factory
 {
@@ -13,11 +14,12 @@ class ParticipantFactory extends Factory
     public function definition(): array
     {
         return [
-            'session_id' => Session::factory(),
-            'name'       => fake()->name(),
-            'address'    => fake()->streetAddress() . ', Kuala Lumpur',
-            'latitude'   => fake()->randomFloat(8, 2.9, 3.3),
-            'longitude'  => fake()->randomFloat(8, 101.5, 101.8),
+            'session_id'   => Session::factory(),
+            'name'         => fake()->name(),
+            'address'      => fake()->streetAddress() . ', Kuala Lumpur',
+            'latitude'     => fake()->randomFloat(8, 2.9, 3.3),
+            'longitude'    => fake()->randomFloat(8, 101.5, 101.8),
+            'access_token' => Str::random(40),
         ];
     }
 }

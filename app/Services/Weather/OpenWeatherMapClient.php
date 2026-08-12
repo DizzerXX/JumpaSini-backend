@@ -3,6 +3,7 @@
 namespace App\Services\Weather;
 
 use App\Exceptions\WeatherServiceException;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 
 class OpenWeatherMapClient
@@ -21,7 +22,7 @@ class OpenWeatherMapClient
      */
     public function getCurrentWeather(float $lat, float $lng): WeatherData
     {
-        $response = Http::get(self::BASE_URL . '/weather', [
+        $response = $this->client()->get(self::BASE_URL . '/weather', [
             'lat'   => $lat,
             'lon'   => $lng,
             'appid' => $this->apiKey,
@@ -45,7 +46,7 @@ class OpenWeatherMapClient
     {
         $cnt = (int) ceil($hours / 3);
 
-        $response = Http::get(self::BASE_URL . '/forecast', [
+        $response = $this->client()->get(self::BASE_URL . '/forecast', [
             'lat'   => $lat,
             'lon'   => $lng,
             'appid' => $this->apiKey,
@@ -65,5 +66,10 @@ class OpenWeatherMapClient
             static fn (array $entry) => WeatherData::fromApiResponse($entry),
             $list
         );
+    }
+
+    private function client(): PendingRequest
+    {
+        return Http::timeout(5)->retry(2, 200);
     }
 }

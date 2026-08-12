@@ -22,8 +22,11 @@ return [
     ],
 
     'cache' => [
-        'places_ttl'   => 86400,
-        'distance_ttl' => 3600,
+        'places_ttl'       => 86400,
+        'distance_ttl'     => 3600,
+        // Autocomplete is keystroke-driven; a short TTL collapses repeated prefixes
+        // across users without serving stale predictions.
+        'autocomplete_ttl' => 600,
     ],
 
     'participants' => [
@@ -34,6 +37,13 @@ return [
     'voting' => [
         'duration_minutes' => env('VOTING_DURATION_MINUTES', 5),
         'enabled'          => env('VOTING_ENABLED', true),
+    ],
+
+    // Read via config(), never env(), so these still resolve once config is cached
+    // (the deploy caches config before seeding).
+    'admin' => [
+        'email'    => env('ADMIN_EMAIL', 'admin@jumpa.sini'),
+        'password' => env('ADMIN_PASSWORD'),
     ],
 
     'weather' => [

@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Matches the "PHP 8.2+" floor in composer.json.
+        php: ['8.2', '8.3']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          # pdo_sqlite backs the in-memory test database configured in phpunit.xml.
+          extensions: mbstring, bcmath, pdo, pdo_sqlite, gd, zip
+          coverage: none
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ matrix.php }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Run tests
+        run: php artisan test
+
+      # The suite must never touch a real database. phpunit.xml pins sqlite/:memory:
+      # because RefreshDatabase drops and re-migrates whatever connection is active —
+      # if that pin is ever removed, a developer running tests wipes the database in
+      # their .env. Fail the build rather than let that regress silently.
+      - name: Assert tests are pinned to in-memory SQLite
+        run: |
+          grep -q '<env name="DB_CONNECTION" value="sqlite"/>' phpunit.xml
+          grep -q '<env name="DB_DATABASE" value=":memory:"/>' phpunit.xml

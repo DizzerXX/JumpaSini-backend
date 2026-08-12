@@ -4,12 +4,15 @@ use App\Http\Controllers\Api\V1\Admin\AdminController;
 use App\Http\Controllers\Api\V1\Admin\AnalyticsController;
 use App\Http\Controllers\Api\V1\Admin\VenueManagementController;
 use App\Http\Controllers\Api\V1\CollaborationController;
+use App\Http\Controllers\Api\V1\PlaceController;
 use App\Http\Controllers\Api\V1\RecommendationController;
 use App\Http\Controllers\Api\V1\SessionController;
 use App\Http\Controllers\Api\V1\VenueController;
 use App\Http\Controllers\Api\V1\WeatherController;
 use Illuminate\Support\Facades\Route;
 
+// Referenced by render.yaml's healthCheckPath — do not remove without updating
+// the deploy config, or Render will mark the service unhealthy.
 Route::get('/v1/health', fn() => response()->json(['status' => 'ok']));
 
 Route::prefix('v1')->group(function () {
@@ -29,9 +32,21 @@ Route::prefix('v1')->group(function () {
     Route::get('sessions/{short_code}/weather', [WeatherController::class, 'show']);
     Route::post('venues/{place_id}/halal-report', [VenueController::class, 'reportHalal']);
 
+    // ─── Places proxy ─────────────────────────────────────────────────────────
+    // Keeps the Google key server-side and every lookup behind the shared cache.
+    // Throttled: autocomplete fires per keystroke, so it is the easiest endpoint
+    // to run up a Google bill with.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('places/autocomplete', [PlaceController::class, 'autocomplete']);
+        Route::get('places/reverse-geocode', [PlaceController::class, 'reverseGeocode']);
+        Route::get('places/{place_id}', [PlaceController::class, 'details']);
+    });
+
     // ─── Admin Routes ─────────────────────────────────────────────────────────
     Route::prefix('admin')->group(function () {
-        Route::post('login', [AdminController::class, 'login']);
+        // Stricter than the global api throttle — this endpoint is a brute-force target.
+        Route::post('login', [AdminController::class, 'login'])
+            ->middleware('throttle:5,1');
 
         Route::middleware('auth:sanctum')->group(function () {
             Route::post('logout', [AdminController::class, 'logout']);

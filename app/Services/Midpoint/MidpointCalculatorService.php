@@ -102,16 +102,26 @@ class MidpointCalculatorService
         $isFair        = false;
         $times         = [];
 
+        // Keep the best centroid seen rather than whatever the last iteration produced —
+        // a step toward the outlier can overshoot and make the spread worse.
+        $bestCentroid = $centroid;
+        $bestTimes    = null;
+        $bestSpread   = PHP_INT_MAX;
+
         do {
             $rows = $this->mapsClient->distanceMatrix($coords, [$centroid], $transportMode);
 
-            $times = [];
-            foreach ($participants as $i => $participant) {
-                $times[$i] = (int) ($rows[$i]['elements'][0]['duration']['value'] ?? 0);
-            }
+            $times = $this->extractTravelTimes($rows, count($participants));
 
             $isFair = $this->validateFairness($times);
             $iterations++;
+
+            $spread = empty($times) ? PHP_INT_MAX : (max($times) - min($times));
+            if ($spread < $bestSpread) {
+                $bestSpread   = $spread;
+                $bestCentroid = $centroid;
+                $bestTimes    = $times;
+            }
 
             if (!$isFair && $iterations < $maxIterations) {
                 $centroid = $this->adjustCentroid($centroid, $coords, $times);
@@ -120,24 +130,68 @@ class MidpointCalculatorService
 
         if (!$isFair) {
             Log::warning('MidpointCalculator: max iterations reached without achieving fairness.', [
-                'centroid'   => $centroid,
+                'centroid'   => $bestCentroid,
                 'iterations' => $iterations,
+                'spread'     => $bestSpread,
             ]);
         }
+
+        // When fairness was reached, the final centroid is the answer; otherwise fall
+        // back to the fairest one we actually measured.
+        $resultCentroid = $isFair ? $centroid : $bestCentroid;
+        $resultTimes    = $isFair ? $times : ($bestTimes ?? $times);
 
         // Build the participant_id => seconds map for the result
         $travelTimesById = [];
         foreach ($participants as $i => $participant) {
-            $travelTimesById[$participant->id] = $times[$i];
+            $travelTimesById[$participant->id] = $resultTimes[$i] ?? null;
         }
 
         return MidpointResult::make([
-            'lat'            => $centroid['lat'],
-            'lng'            => $centroid['lng'],
+            'lat'            => $resultCentroid['lat'],
+            'lng'            => $resultCentroid['lng'],
             'travel_times'   => $travelTimesById,
             'is_fair'        => $isFair,
             'iterations'     => $iterations,
             'transport_mode' => $transportMode,
         ]);
+    }
+
+    /**
+     * Pull per-origin durations out of a Distance Matrix response.
+     *
+     * Only elements Google reported as OK are included. A leg it could not route
+     * (ZERO_RESULTS / NOT_FOUND — routine for transit outside service hours) must be
+     * omitted, not recorded as 0 seconds: a zero reads as "already at the midpoint"
+     * and drags the result away from the participant who could not be reached.
+     *
+     * @return array<int, int> Keyed by origin index; unroutable origins are absent.
+     */
+    private function extractTravelTimes(array $rows, int $originCount): array
+    {
+        $times = [];
+
+        for ($i = 0; $i < $originCount; $i++) {
+            $element = $rows[$i]['elements'][0] ?? null;
+
+            if ($element === null || ($element['status'] ?? '') !== 'OK') {
+                continue;
+            }
+
+            $duration = $element['duration']['value'] ?? null;
+
+            if ($duration !== null) {
+                $times[$i] = (int) $duration;
+            }
+        }
+
+        if (count($times) < $originCount) {
+            Log::warning('MidpointCalculator: some legs could not be routed and were excluded.', [
+                'routed'   => count($times),
+                'expected' => $originCount,
+            ]);
+        }
+
+        return $times;
     }
 }

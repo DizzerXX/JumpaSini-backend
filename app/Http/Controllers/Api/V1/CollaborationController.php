@@ -9,6 +9,7 @@ use App\Http\Resources\SessionResource;
 use App\Jobs\AutoConfirmVenueJob;
 use App\Repositories\Contracts\SessionRepositoryInterface;
 use App\Repositories\Contracts\VenueVoteRepositoryInterface;
+use App\Services\Session\ParticipantAuthenticator;
 use App\Services\Session\SummaryService;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
@@ -18,9 +19,10 @@ class CollaborationController extends Controller
     use ApiResponseTrait;
 
     public function __construct(
-        private readonly SessionRepositoryInterface  $sessionRepository,
+        private readonly SessionRepositoryInterface   $sessionRepository,
         private readonly VenueVoteRepositoryInterface $voteRepository,
-        private readonly SummaryService              $summaryService,
+        private readonly SummaryService               $summaryService,
+        private readonly ParticipantAuthenticator     $participantAuthenticator,
     ) {}
 
     public function castVote(CastVoteRequest $request, string $shortCode): JsonResponse
@@ -31,11 +33,26 @@ class CollaborationController extends Controller
             return $this->errorResponse('Session not found or has expired.', null, 404);
         }
 
+        $participant = $this->participantAuthenticator->authenticate(
+            $session,
+            $request->participant_id,
+            $request->access_token,
+        );
+
+        if ($participant === null) {
+            return $this->errorResponse(
+                'You must be a participant in this session to vote.',
+                null,
+                403
+            );
+        }
+
         $vote = $this->voteRepository->upsertVote(
             sessionId:       $session->id,
+            participantId:   $participant->id,
             placeId:         $request->google_place_id,
             venueName:       $request->venue_name,
-            participantName: $request->participant_name,
+            participantName: $request->participant_name ?? $participant->name,
             vote:            $request->vote,
         );
 
