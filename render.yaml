@@ -44,9 +44,9 @@ services:
       # Browser origins allowed to call this API. Without this the dashboard is
       # blocked by CORS, since allowed_origins is no longer "*".
       - key: CORS_ALLOWED_ORIGINS
-        value: https://jumpasini-dashboard.onrender.com
+        value: https://jumpasini-frontend.onrender.com
       - key: FRONTEND_URL
-        value: https://jumpasini-dashboard.onrender.com
+        value: https://jumpasini-frontend.onrender.com
 
       # Secrets — set these in the Render dashboard, not in this file.
       - key: APP_KEY
