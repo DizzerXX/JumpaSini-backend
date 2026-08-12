@@ -2,40 +2,46 @@
 
 namespace App\Repositories;
 
+use App\Helpers\GeoHelper;
 use App\Models\Venue;
 use App\Repositories\Contracts\VenueRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
+
 class VenueRepository implements VenueRepositoryInterface
 {
+    /**
+     * Venues of a type within a radius of a point, nearest first.
+     *
+     * The database does the indexable part (type + active + bounding box) and PHP
+     * does the exact distance. The haversine used to run as raw SQL, which relied on
+     * acos/radians — Postgres has those, SQLite does not, so the query exploded the
+     * moment the suite ran against the test database. Distance is computed in PHP
+     * against the small set the bounding box returns, which is portable and reuses
+     * the same GeoHelper the venue results are scored with.
+     */
     public function findNearMidpoint(float $lat, float $lng, string $type, int $radiusMeters): Collection
     {
-        $haversine = '6371000 * acos(
-                    cos(radians(?)) * cos(radians(latitude)) *
-                    cos(radians(longitude) - radians(?)) +
-                    sin(radians(?)) * sin(radians(latitude))
-                )';
-
-        // Bounding-box prefilter: the haversine expression can't use an index, so
-        // without this every active venue of the type is scanned and scored. The box
-        // is a cheap superset of the circle — the exact radius filter still runs below.
         [$latMin, $latMax, $lngMin, $lngMax] = $this->boundingBox($lat, $lng, $radiusMeters);
 
-        $inner = Venue::active()
+        return Venue::active()
             ->byType($type)
             ->whereBetween('latitude', [$latMin, $latMax])
             ->whereBetween('longitude', [$lngMin, $lngMax])
-            ->selectRaw("*, ($haversine) AS distance_meters", [$lat, $lng, $lat])
-            ->toBase();
+            ->get()
+            ->map(function (Venue $venue) use ($lat, $lng): Venue {
+                $venue->distance_meters = GeoHelper::haversineDistance(
+                    $lat,
+                    $lng,
+                    (float) $venue->latitude,
+                    (float) $venue->longitude,
+                );
 
-        $rows = DB::query()
-            ->fromSub($inner, 'subquery')
-            ->where('distance_meters', '<=', $radiusMeters)
-            ->orderBy('distance_meters')
-            ->get();
-
-        return Venue::hydrate($rows->map(fn ($r) => (array) $r)->all());
+                return $venue;
+            })
+            ->filter(fn (Venue $venue): bool => $venue->distance_meters <= $radiusMeters)
+            ->sortBy('distance_meters')
+            ->values();
     }
 
     /**
